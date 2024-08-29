@@ -23,7 +23,7 @@ class cebnm:
 
             # Call the appropriate function based on the mixture type
             if self.type == "normal":
-                autoselect_scales_mix_norm(**args)
+                self.scale = autoselect_scales_mix_norm(**args)
             elif self.type == "exp":
                 args['tt'] = tt  # Add 'tt' for "exp" type
-                autoselect_scales_mix_exp(**args)
+                self.scale =autoselect_scales_mix_exp(**args)
