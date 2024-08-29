@@ -1,4 +1,4 @@
-def autoselect_scales_mix_norm(betahat, sebetahat, max_class=10, mult=2):
+def autoselect_scales_mix_norm(betahat, sebetahat, max_class=None, mult=2):
     sigmaamin = np.min(sebetahat) / 10
     if np.all(betahat**2 < sigmaamin**2):  # Fix the typo and ensure logical comparison
         sigmaamax = 8 * sigmaamin
@@ -15,20 +15,21 @@ def autoselect_scales_mix_norm(betahat, sebetahat, max_class=10, mult=2):
 
         # Calculate the output
         out = np.concatenate(([0], (1/mult) ** (-sequence) * sigmaamax))
-        
-        # Check if the length of out is equal to max_class
-        if len(out) != max_class:
+        if max_class!=None:
+            # Check if the length of out is equal to max_class
+            if len(out) != max_class:
             # Generate a sequence from min(out) to max(out) with length max_class
-            out = np.linspace(np.min(out), np.max(out), num=max_class)
+                out = np.linspace(np.min(out), np.max(out), num=max_class)
+        
     
     return out
      
-def autoselect_scales_mix_exp(betahat, sebetahat, max_class=10, mult=1.5,tt=1.5):
+def autoselect_scales_mix_exp(betahat, sebetahat, max_class=None , mult=1.5,tt=1.5):
     sigmaamin = np.min(sebetahat) / 10
     if np.all(betahat**2 < sigmaamin**2):  # Fix the typo and ensure logical comparison
         sigmaamax = 8 * sigmaamin
     else:
-        sigmaamax = tt*np.sqrt(np.max(betahat**2 - sebetahat**2))
+        sigmaamax = tt*np.sqrt(np.max(betahat**2  ))
     
     if mult == 0:
         out = np.array([0, sigmaamax / 2])
@@ -40,11 +41,14 @@ def autoselect_scales_mix_exp(betahat, sebetahat, max_class=10, mult=1.5,tt=1.5)
 
         # Calculate the output
         out = np.concatenate(([0], (1/mult) ** (-sequence) * sigmaamax))
-        
-        # Check if the length of out is equal to max_class
-        if len(out) != max_class:
+        if max_class!=None:
+            # Check if the length of out is equal to max_class
+            if len(out) != max_class:
             # Generate a sequence from min(out) to max(out) with length max_class
-            out = np.linspace(np.min(out), np.max(out), num=max_class)
+                out = np.linspace(np.min(out), np.max(out), num=max_class)
+                if(out[2] <1e-2 ):
+                 out[2: ] <- out[2: ] +1e-2
+         
     
     return out
 
