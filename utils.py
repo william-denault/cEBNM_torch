@@ -54,5 +54,3 @@ def autoselect_scales_mix_exp(betahat, sebetahat, max_class=None , mult=1.5,tt=1
 
     
     
-
-    
