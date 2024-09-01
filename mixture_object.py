@@ -9,6 +9,9 @@ class cebnm:
         self.type = mixture_type
 
         if betahat is not None and sebetahat is not None:
+            self.betahat   = betahat
+            self.sebetahat = sebetahat
+            
             # Common arguments
             args = {
                 'betahat': betahat,
@@ -27,3 +30,5 @@ class cebnm:
             elif self.type == "exp":
                 args['tt'] = tt  # Add 'tt' for "exp" type
                 self.scale =autoselect_scales_mix_exp(**args)
+            ncomp = self.scale.shape[0]
+            self.mixture_prop = np.full(ncomp, 1/ncomp)

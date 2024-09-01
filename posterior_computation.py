@@ -2,7 +2,14 @@ def posterior_mean_exp(betahat, sebethat, log_pi, scale):
      assignment  <- np.exp(log_pi)
      assignment <- assignment /  sum(assignment)
      
+     temp_array =  np.zeros ( (betahat.shape[0], scale.shape[0]))   
+     for i in range(betahat.shape[0]):
+          temp_array[i,] = wpost_exp ( x=betahat[i], 
+                                      s=sebetahat[i],
+                                      w=wassignment[i,],
+                                      scale=scale)   
      
+     TBEdone
      
 def wpost_exp ( x, s, w, scale):
     
@@ -19,8 +26,10 @@ def wpost_exp ( x, s, w, scale):
      bmax=np.max(log_prob)
      log_prob = log_prob - bmax
  
-  log_prob = log_prob - bmax
-  wpost <- w* exp( log_prob) / (sum(w *exp(log_prob)))
+     log_prob = log_prob - bmax
+     wpost = w* np.exp( log_prob) / (sum(w *np.exp(log_prob)))
+     return wpost
 
 
-    
+def compute_posterior_assignment_mix_exp(betahat, sebetahat, log_pi, scale ):
+     
