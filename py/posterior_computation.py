@@ -1,9 +1,16 @@
 import sys
 import os
+import numpy as np
+import math 
+from scipy.stats import norm
+from scipy.stats import truncnorm
+import scipy.stats as stats
+
 
 # Add the path to utils.py
 sys.path.append(r"c:\Document\Serieux\Travail\python_work\cEBNM_torch\py")
 from distribution_operation import *
+from numerical_routine import *
 
 class PosteriorMeanExp:
     def __init__(self, post_mean, post_mean2, post_sd):
@@ -108,3 +115,13 @@ def posterior_mean_norm(betahat, sebetahat, log_pi, scale):
     post_sd    = np.sqrt(post_mean2-post_mean**2)
     return PosteriorMeanNorm(post_mean, post_mean2, post_sd)
 
+def apply_log_sum_exp(data_loglik, assignment_loglik):
+    combined_loglik = data_loglik + assignment_loglik
+    
+    def subtract_log_sum_exp(row):
+        return row - log_sum_exp(row)
+    
+    # Apply the function row-wise and stack the results
+    res = np.apply_along_axis(subtract_log_sum_exp, 1, combined_loglik)
+    
+    return res
