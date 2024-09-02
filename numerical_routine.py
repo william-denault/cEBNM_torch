@@ -119,3 +119,30 @@ def my_e2truncnorm(a, b, mean=0, sd=1):
         res[sd_zero & (a < mean) & (b > mean)] = mean[sd_zero & (a < mean) & (b > mean)] ** 2
     
     return res
+
+
+
+
+
+def log_sum_exp(lx, idxs=None, na_rm=False):
+    # Convert input to a numpy array if it's not already
+    lx = np.asarray(lx, dtype=np.float64)
+    
+    # If indices are provided, select the elements at those indices
+    if idxs is not None:
+        lx = lx[idxs]
+    
+    # Handle NaN values if na_rm is True
+    if na_rm:
+        lx = lx[~np.isnan(lx)]
+    
+    # To prevent overflow/underflow issues, subtract the max value from lx before exponentiating
+    max_lx = np.max(lx)
+    if np.isinf(max_lx):
+        return max_lx  # Return max_lx if it's inf or -inf
+    
+    # Compute the log-sum-exp
+    sum_exp = np.sum(np.exp(lx - max_lx))
+    log_sum_exp_result = max_lx + np.log(sum_exp)
+    
+    return log_sum_exp_result
