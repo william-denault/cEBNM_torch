@@ -70,3 +70,35 @@ def wpost_exp ( x, s, w, scale):
      log_prob = log_prob - bmax
      wpost = w* np.exp( log_prob) / (sum(w *np.exp(log_prob)))
      return wpost    
+ 
+ 
+ 
+class PosteriorMeanNorm:
+    def __init__(self, post_mean, post_mean2, post_sd):
+        self.post_mean = post_mean
+        self.post_mean2 = post_mean2
+        self.post_sd = post_sd
+        
+def posterior_mean_norm(betahat, sebetahat, log_pi, scale):
+    
+    location = 0* scale
+    data_loglik = get_data_loglik_normal (  betahat,sebetahat, location, scale)
+    log_post_assignment = apply_log_sum_exp(data_loglik, log_pi)
+    t_ind_Var =np.zeros((betahat.shape[0], scale.shape[0]))
+ 
+    for i in range(t_ind_Var.shape[0]):
+        t_ind_Var[i , ]= np.concatenate(
+                                        ([0], 
+                                         1/((1/sebetahat[i]**2)+ (1/scale[1:]**2)) )
+                                        )#assume that first entry of scale is 0
+        
+    temp=np.zeros((betahat.shape[0], scale.shape[0]))
+
+    for i in range(temp.shape[0]):
+        temp[i,] = (t_ind_Var[i,]/(sebetahat[i]**2))*betahat[i]
+
+    post_mean  = np.sum ( np.exp(log_post_assignment)* temp, axis=1)
+    post_mean2 = np.sum ( np.exp(log_post_assignment)*( t_ind_Var+ temp**2), axis=1)
+    post_sd    = np.sqrt(post_mean2-post_mean**2)
+    return PosteriorMeanNorm(post_mean, post_mean2, post_sd)
+
