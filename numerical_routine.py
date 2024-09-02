@@ -1,5 +1,30 @@
 import numpy as np
+import math 
+from scipy.stats import norm
+from scipy.stats import truncnorm
 import scipy.stats as stats
+
+
+def wpost_exp ( x, s, w, scale):
+    
+    if  w[0]==1:
+     out =  np.concatenate(([1]  ,np.full( scale.shape[0],[0])))
+     return out
+    else:
+     a=1/scale[1:]
+     w = assignment
+     a = 1 / scale[1:]  # Note: slicing in Python is zero-based, so [1:] starts from the second element
+     lf = norm.logpdf(x, loc=0, scale=s)
+     lg = np.log(a) + s**2 * a**2 / 2 - a * x + norm.logcdf(x / s - s * a)
+     log_prob = np.concatenate(([lf]  ,lg ))
+     bmax=np.max(log_prob)
+     log_prob = log_prob - bmax
+ 
+     log_prob = log_prob - bmax
+     wpost = w* np.exp( log_prob) / (sum(w *np.exp(log_prob)))
+     return wpost    
+ 
+ 
 
 def do_truncnorm_argchecks(a, b):
     # Ensure a and b are numpy arrays, even if they are scalars
@@ -63,6 +88,8 @@ def my_etruncnorm(a, b, mean=0, sd=1):
 def my_e2truncnorm(a, b, mean=0, sd=1):
     a, b = do_truncnorm_argchecks(a, b)
     
+    mean = np.atleast_1d(mean)
+    sd   = np.atleast_1d(sd)
     alpha = (a - mean) / sd
     beta = (b - mean) / sd
     
@@ -72,16 +99,16 @@ def my_e2truncnorm(a, b, mean=0, sd=1):
     beta[flip] = -orig_alpha[flip]
     
     if np.any(mean != 0):
-        mean = np.tile(mean, len(alpha))
-        mean[flip] = -mean[flip]
+         
+        mean  =  abs(mean)
     
     pnorm_diff = logscale_sub(stats.norm.logcdf(beta), stats.norm.logcdf(alpha))
     alpha_frac = alpha * np.exp(stats.norm.logpdf(alpha) - pnorm_diff)
     beta_frac = beta * np.exp(stats.norm.logpdf(beta) - pnorm_diff)
     
-    # Mask invalid values
-    alpha_frac = np.where(np.isnan(alpha_frac), 0, alpha_frac)
-    beta_frac = np.where(np.isnan(beta_frac), 0, beta_frac)
+    # Handle inf and nan values in alpha_frac and beta_frac
+    alpha_frac[np.isnan(alpha_frac) | np.isinf(alpha_frac)] = 0
+    beta_frac[np.isnan(beta_frac) | np.isinf(beta_frac)] = 0
     
     scaled_res = np.ones_like(alpha)
     scaled_res[np.isnan(flip)] = np.nan
@@ -96,8 +123,6 @@ def my_e2truncnorm(a, b, mean=0, sd=1):
     
     upper_bd1 = beta ** 2 + 2 * (1 + 1 / beta ** 2)
     upper_bd2 = (alpha ** 2 + alpha * beta + beta ** 2) / 3
-    upper_bd1 = np.where(np.isnan(upper_bd1), np.inf, upper_bd1)
-    upper_bd2 = np.where(np.isnan(upper_bd2), np.inf, upper_bd2)
     upper_bd = np.minimum(upper_bd1, upper_bd2)
     bad_idx = (~np.isnan(beta)) & (beta < 0) & ((scaled_res < beta ** 2) | (scaled_res > upper_bd))
     scaled_res[bad_idx] = upper_bd[bad_idx]
@@ -115,8 +140,3 @@ def my_e2truncnorm(a, b, mean=0, sd=1):
         res[sd_zero & (a < mean) & (b > mean)] = mean[sd_zero & (a < mean) & (b > mean)] ** 2
     
     return res
-
-def my_vtruncnorm(a, b, mean=0, sd=1):
-    a, b = do_truncnorm_argchecks(a, b)
-    
-    alpha = (a - mea

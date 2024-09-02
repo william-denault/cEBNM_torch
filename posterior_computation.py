@@ -1,15 +1,53 @@
 def posterior_mean_exp(betahat, sebethat, log_pi, scale):
      assignment  <- np.exp(log_pi)
      assignment <- assignment /  sum(assignment)
-     
-     temp_array =  np.zeros ( (betahat.shape[0], scale.shape[0]))   
+     mu=0
+     post_assign =   np.zeros ( (betahat.shape[0], scale.shape[0]))
      for i in range(betahat.shape[0]):
-          temp_array[i,] = wpost_exp ( x=betahat[i], 
-                                      s=sebetahat[i],
-                                      w=wassignment[i,],
-                                      scale=scale)   
-     
-     TBEdone
+               post_assign[i,] = wpost_exp ( x=betahat[i],
+                                            s=sebetahat[i], 
+                                            w=assignment[i,],
+                                            scale=scale) 
+     post_mean = np.zeros(betahat.shape[0])
+     post_mean2 = np.zeros(betahat.shape[0])
+
+     for i in range(post_mean.shape[0]):
+          post_mean[i]=  sum(    post_assign[i,1:] *  my_etruncnorm(0,
+                                             np.inf,
+                                             betahat[i]- sebetahat[i]** 2 *(1/scale[1:]) , 
+                                             sebetahat[i] 
+                                             )
+                       )
+          post_mean2[i] =  sum ( post_assign[i,1:] *my_e2truncnorm(0,
+                                             99999, #some weird warning for inf so just use something large enought for b
+                                             betahat[i]- sebetahat[i]** 2 *(1/scale[1:]) , 
+                                             sebetahat[i] 
+                                             )
+                       )
+          post_mean2[i]= max(post_mean[i],post_mean2[i])
+     if np.any(np.isinf(sebetahat)):
+          inf_indices = np.isinf(sebetahat)
+          a=1/scale[1:]
+          # Equivalent of `post$mean[is.infinite(s)]` 
+          post_mean = np.zeros_like(s)  # Initialize with the same shape as s
+          post_mean[inf_indices] = np.sum(post_assignment[inf_indices, 1:] / a, axis=1)
+
+          # Equivalent of `post$mean2[is.infinite(s)]`
+          post_mean2 = np.zeros_like(s)  # Initialize with the same shape as s
+          post_mean2[inf_indices] = np.sum(2 * post_assignment[inf_indices, 1:] / a**2, axis=1)
+
+     # Calculate `post$sd`
+     post_sd = np.sqrt(np.maximum(0, post_mean2 - post_mean**2))
+
+     # Update `post$mean2` and `post$mean`
+     post_mean2 = post_mean2 + mu**2 + 2 * mu * post_mean
+     post_mean = post_mean + mu
+     out ={
+        'post_mean': post_mean,
+        'post_mean2': post_mean2
+          }
+     return(out)
+
      
 def wpost_exp ( x, s, w, scale):
     
