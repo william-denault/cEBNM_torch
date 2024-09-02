@@ -1,3 +1,6 @@
+import numpy as np
+import math 
+
 def autoselect_scales_mix_norm(betahat, sebetahat, max_class=None, mult=2):
     sigmaamin = np.min(sebetahat) / 10
     if np.all(betahat**2 < sigmaamin**2):  # Fix the typo and ensure logical comparison

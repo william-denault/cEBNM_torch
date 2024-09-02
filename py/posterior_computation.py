@@ -1,3 +1,9 @@
+import sys
+import os
+
+# Add the path to utils.py
+sys.path.append(r"c:\Document\Serieux\Travail\python_work\cEBNM_torch\py")
+from distribution_operation import *
 
 class PosteriorMeanExp:
     def __init__(self, post_mean, post_mean2, post_sd):
