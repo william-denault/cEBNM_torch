@@ -24,3 +24,34 @@ def get_data_loglik_normal (  betahat,sebetahat, location, scale):
                                          location=location,
                                          scale=scale)
     return out
+  
+  
+  #write convolved exp
+  
+def convolved_logpdf_exp(  betahat, sebetahat, scale):
+    """
+    Python equivalent of the R function convolved_logpdf.exp
+    
+    Parameters:
+     
+    betahat (float): The beta hat value
+    sebetahat (float): The standard error
+    
+    Returns:
+    float: The computed log probability density
+    """ 
+    rate = 1 / scale[1:]
+       
+    out_0 = np.array([ norm.logpdf(betahat, 0, sebetahat)])
+    
+    out_1 = (np.log(rate) + 0.5 * sebetahat**2 * rate**2 - betahat * rate + 
+            norm.logcdf(betahat/sebetahat - sebetahat * rate))
+    return (  np.concatenate((out_0,out_1) )  )  
+        
+def get_data_loglik_exp (  betahat,sebetahat,scale):
+    out = np.zeros( (betahat.shape[0], scale.shape[0]))
+    for i in range(betahat.shape[0]):
+        out[i,] =convolved_logpdf_exp(betahat=betahat[i],
+                                         sebetahat=sebetahat[i],  
+                                         scale=scale)
+    return out
