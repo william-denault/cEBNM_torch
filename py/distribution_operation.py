@@ -13,7 +13,7 @@ def convolved_logpdf_normal(  betahat,sebetahat, location, scale):
     logp = norm.logpdf(betahat, loc= location, scale=sd)
     
     # Clamp the log probabilities to the range [-1e4, 1e4]
-    logp = np.clip(logp, -1e4, 1e4)
+    logp = np.clip(logp, -1e5, 1e5)
     
     return logp
 def get_data_loglik_normal (  betahat,sebetahat, location, scale):
