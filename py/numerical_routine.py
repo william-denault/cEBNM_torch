@@ -209,7 +209,7 @@ def sample_minibatch(L, batch_size):
     batch_indices = np.random.choice(n, batch_size, replace=False)
     return L[batch_indices, :]
 
-def optimize_pi(L, penalty, learning_rate=0.01, max_iters=1000, batch_size=128):
+def optimize_pi(L, penalty, max_iters=500, batch_size=128):
     """
     Optimize pi using minibatches of data subject to the simplex constraint that pi lies in the K-dimensional simplex.
     
