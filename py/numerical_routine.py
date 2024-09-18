@@ -3,7 +3,7 @@ import math
 from scipy.stats import norm
 from scipy.stats import truncnorm
 import scipy.stats as stats
-
+from scipy.optimize import minimize
 
 def do_truncnorm_argchecks(a, b):
     # Ensure a and b are numpy arrays, even if they are scalars
@@ -146,3 +146,74 @@ def log_sum_exp(lx, idxs=None, na_rm=False):
     log_sum_exp_result = max_lx + np.log(sum_exp)
     
     return log_sum_exp_result
+
+import numpy as np
+from scipy.optimize import minimize
+
+def penalized_log_likelihood(pi, L, penalty):
+    """
+    Compute the penalized log likelihood function for a given pi using proper loops.
+    
+    Parameters:
+    pi (numpy array): A vector of length K+1 corresponding to pi_k.
+    L (numpy array): An n x K matrix where each entry corresponds to l_kj.
+    lam (numpy array): A vector of length K+1 corresponding to lambda_k.
+
+    Returns:
+    float: The negative penalized log likelihood (for minimization purposes).
+    """
+    n, K = L.shape[0], L.shape[1]
+
+    # Initialize the first summation (over j)
+    first_sum = 0
+    for j in range(n):
+        inner_sum = 0
+        for k in range(K):
+            inner_sum += pi[k] * L[j, k]
+        first_sum += np.log(inner_sum)
+    
+   
+    # Combine the two terms
+    if penalty >1:
+        penalized_log_likelihood_value = first_sum +  (penalty - 1) * np.log(pi[0])
+    else :
+        penalized_log_likelihood_value = first_sum
+    # Return the negative since we are minimizing
+    return -penalized_log_likelihood_value
+
+def constraint_sum_to_one(pi):
+    """
+    Constraint to ensure that the sum of pi equals 1 (simplex constraint).
+    """
+    return np.sum(pi) - 1
+
+def optimize_pi(L,penalty):
+    """
+    Optimize pi subject to the simplex constraint that pi lies in the K-dimensional simplex.
+    
+    Parameters:
+    L (numpy array): The array with shape (K+1, n) where L[k, j] corresponds to l_kj.
+    lam (numpy array): The vector lambda with shape (K+1,).
+    
+    Returns:
+    numpy array: The optimized pi values.
+    """
+    K = L.shape[1]   # Number of components
+    initial_pi = np.ones(K) / (K)  # Start with uniform pi in the simplex
+    
+    # Define bounds for pi, ensuring each pi_k is between 0 and 1
+    bounds = [(0, 1) for _ in range(K)]
+    
+    # Constraints: sum(pi) = 1
+    constraints = {'type': 'eq', 'fun': constraint_sum_to_one}
+    
+    # Minimize the negative penalized log-likelihood
+    result = minimize(penalized_log_likelihood, initial_pi, args=(L, penalty), 
+                      method='SLSQP', bounds=bounds, constraints=constraints)
+    
+    if result.success:
+        return result.x
+    else:
+        raise ValueError("Optimization failed: " + result.message)
+
+ 
