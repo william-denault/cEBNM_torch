@@ -150,34 +150,39 @@ def log_sum_exp(lx, idxs=None, na_rm=False):
 import numpy as np
 from scipy.optimize import minimize
 
-def penalized_log_likelihood(pi, L, penalty):
+def penalized_log_likelihood(pi, L_batch, penalty, epsilon=1e-10):
     """
-    Compute the penalized log likelihood function for a given pi using proper loops.
+    Compute the penalized log likelihood function using clamping to avoid log(0) or log(negative).
     
     Parameters:
-    pi (numpy array): A vector of length K+1 corresponding to pi_k.
-    L (numpy array): An n x K matrix where each entry corresponds to l_kj.
-    lam (numpy array): A vector of length K+1 corresponding to lambda_k.
-
+    pi (numpy.ndarray): A vector of length K corresponding to pi_k.
+    L_batch (numpy.ndarray): A minibatch matrix of shape (batch_size, K) where each entry corresponds to l_kj.
+    penalty (float): The penalty term.
+    epsilon (float): Small constant to avoid log of zero or division by zero.
+    
     Returns:
     float: The negative penalized log likelihood (for minimization purposes).
     """
-    n, K = L.shape[0], L.shape[1]
+    batch_size, K = L_batch.shape
 
     # Initialize the first summation (over j)
     first_sum = 0
-    for j in range(n):
+    for j in range(batch_size):
         inner_sum = 0
         for k in range(K):
-            inner_sum += pi[k] * L[j, k]
+            inner_sum += pi[k] * L_batch[j, k]
+        
+        # Ensure inner_sum is not too small to avoid log(0) or log(negative)
+        inner_sum = np.clip(inner_sum, epsilon, None)
         first_sum += np.log(inner_sum)
     
-   
-    # Combine the two terms
-    if penalty >1:
-        penalized_log_likelihood_value = first_sum +  (penalty - 1) * np.log(pi[0])
-    else :
+    # Add penalty term if applicable
+    if penalty > 1:
+        pi_clamped = np.clip(pi[0], epsilon, None)  # Clamp pi[0] to avoid log of zero
+        penalized_log_likelihood_value = first_sum + (penalty - 1) * np.log(pi_clamped)
+    else:
         penalized_log_likelihood_value = first_sum
+
     # Return the negative since we are minimizing
     return -penalized_log_likelihood_value
 
@@ -187,33 +192,62 @@ def constraint_sum_to_one(pi):
     """
     return np.sum(pi) - 1
 
-def optimize_pi(L,penalty):
+def sample_minibatch(L, batch_size):
     """
-    Optimize pi subject to the simplex constraint that pi lies in the K-dimensional simplex.
+    Randomly sample a minibatch of rows from L.
     
     Parameters:
-    L (numpy array): The array with shape (K+1, n) where L[k, j] corresponds to l_kj.
-    lam (numpy array): The vector lambda with shape (K+1,).
+    L (numpy.ndarray): The full data matrix of shape (n, K).
+    batch_size (int): The size of the minibatch to sample.
     
     Returns:
-    numpy array: The optimized pi values.
+    L_batch (numpy.ndarray): A minibatch of shape (batch_size, K) or the entire dataset if n < batch_size.
     """
-    K = L.shape[1]   # Number of components
-    initial_pi = np.ones(K) / (K)  # Start with uniform pi in the simplex
-    
-    # Define bounds for pi, ensuring each pi_k is between 0 and 1
-    bounds = [(0, 1) for _ in range(K)]
-    
-    # Constraints: sum(pi) = 1
-    constraints = {'type': 'eq', 'fun': constraint_sum_to_one}
-    
-    # Minimize the negative penalized log-likelihood
-    result = minimize(penalized_log_likelihood, initial_pi, args=(L, penalty), 
-                      method='SLSQP', bounds=bounds, constraints=constraints)
-    
-    if result.success:
-        return result.x
-    else:
-        raise ValueError("Optimization failed: " + result.message)
+    n = L.shape[0]
+    if n < batch_size:
+        return L  # If the dataset is smaller than the batch size, use the entire dataset
+    batch_indices = np.random.choice(n, batch_size, replace=False)
+    return L[batch_indices, :]
 
- 
+def optimize_pi(L, penalty, learning_rate=0.01, max_iters=1000, batch_size=128):
+    """
+    Optimize pi using minibatches of data subject to the simplex constraint that pi lies in the K-dimensional simplex.
+    
+    Parameters:
+    L (numpy.ndarray): The likelihood matrix with shape (n, K) where L[j, k] corresponds to l_kj.
+    penalty (float): The penalty parameter.
+    learning_rate (float): The learning rate for Adam optimization.
+    max_iters (int): The maximum number of iterations for optimization.
+    batch_size (int): Size of minibatches used in optimization.
+    
+    Returns:
+    numpy.ndarray: The optimized pi values as a 1D numpy array.
+    """
+    K = L.shape[1]  # Number of components
+    pi = np.ones(K) / K  # Initialize pi uniformly
+
+    for iteration in range(max_iters):
+        # Sample a random minibatch from L
+        L_batch = sample_minibatch(L, batch_size)
+
+        # Define the function to optimize (penalized log likelihood for the minibatch)
+        def func_to_minimize(pi):
+            return penalized_log_likelihood(pi, L_batch, penalty)
+
+        # Define bounds for pi (between 0 and 1)
+        bounds = [(0, 1) for _ in range(K)]
+
+        # Minimize the penalized log-likelihood for the minibatch with constraints
+        result = minimize(func_to_minimize, pi, method='SLSQP', bounds=bounds, constraints={'type': 'eq', 'fun': constraint_sum_to_one})
+
+        if not result.success:
+            raise ValueError("Optimization failed: " + result.message)
+        
+        # Update pi with the new values
+        pi = result.x
+
+        # Print the loss every 100 iterations (optional)
+        if iteration % 100 == 0:
+            print(f"Iteration {iteration}, Loss: {result.fun}")
+    
+    return pi
