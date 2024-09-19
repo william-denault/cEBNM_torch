@@ -209,45 +209,48 @@ def sample_minibatch(L, batch_size):
     batch_indices = np.random.choice(n, batch_size, replace=False)
     return L[batch_indices, :]
 
-def optimize_pi(L, penalty, max_iters=500, batch_size=128):
+ 
+
+
+
+def optimize_pi(L, penalty, max_iters=100, tol=1e-6):
     """
-    Optimize pi using minibatches of data subject to the simplex constraint that pi lies in the K-dimensional simplex.
+    EM algorithm from Stephens 2016 Biostatistics for optimizing pi subject to the simplex constraint that pi lies in the K-dimensional simplex.
     
     Parameters:
     L (numpy.ndarray): The likelihood matrix with shape (n, K) where L[j, k] corresponds to l_kj.
     penalty (float): The penalty parameter.
-    learning_rate (float): The learning rate for Adam optimization.
     max_iters (int): The maximum number of iterations for optimization.
-    batch_size (int): Size of minibatches used in optimization.
+    tol (float): The tolerance for convergence.
     
     Returns:
     numpy.ndarray: The optimized pi values as a 1D numpy array.
     """
-    K = L.shape[1]  # Number of components
-    pi = np.ones(K) / K  # Initialize pi uniformly
-
+    n, K = L.shape  # n: number of data points, K: number of components
+    pi =np.exp( - np.arange(0,K) )/ np.sum( np.exp( - np.arange(0,K) ))  # Initialize pi uniformly
+    vec_pen= np.ones_like(pi)
+    vec_pen[0]= penalty
+    # EM algorithm iterations
     for iteration in range(max_iters):
-        # Sample a random minibatch from L
-        L_batch = sample_minibatch(L, batch_size)
+        # E-Step: calculate responsibilities (w_kj)
+        w =  pi[:, np.newaxis] * L.T   # Element-wise multiplication (pi_k * l_kj)
+        w = w / w.sum(axis=0, keepdims=True)  # Normalize by sum over k for each j
 
-        # Define the function to optimize (penalized log likelihood for the minibatch)
-        def func_to_minimize(pi):
-            return penalized_log_likelihood(pi, L_batch, penalty)
+        # M-Step: update pi
+        n_k = w.sum(axis=1) + vec_pen - 1  # Apply penalty (S.2.8)
+        pi_new = n_k / n_k.sum()  # Normalize to make sure sum(pi) = 1 (S.2.9)
 
-        # Define bounds for pi (between 0 and 1)
-        bounds = [(0, 1) for _ in range(K)]
+        # Check for convergence
+        if np.linalg.norm(pi_new - pi) < tol:
+            print(f"Converged after {iteration} iterations.")
+            break
 
-        # Minimize the penalized log-likelihood for the minibatch with constraints
-        result = minimize(func_to_minimize, pi, method='SLSQP', bounds=bounds, constraints={'type': 'eq', 'fun': constraint_sum_to_one})
+        # Update pi
+        pi = pi_new
 
-        if not result.success:
-            raise ValueError("Optimization failed: " + result.message)
-        
-        # Update pi with the new values
-        pi = result.x
-
-        # Print the loss every 100 iterations (optional)
-        if iteration % 100 == 0:
-            print(f"Iteration {iteration}, Loss: {result.fun}")
-    
     return pi
+
+# Example usage:
+# L is your likelihood matrix (shape n x K)
+# penalty is a scalar penalty parameter, for example: penalty = 0.1
+# pi = em_algorithm(L, penalty)
