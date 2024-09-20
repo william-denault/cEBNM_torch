@@ -1,0 +1,161 @@
+import numpy as np
+
+class cEBMF_object :
+    def __init__( 
+                 self,
+                 data, 
+                 K=5,
+                 X_l=None, 
+                 X_f=None, 
+                 max_K=100, 
+                 prior_L= "normal",
+                 prior_F= "normal",
+                 type_noise='constant' ,
+                 maxit= 100 ,
+                 param_cebmf_l =None,
+                 param_cebmf_f =None,
+                 fit_constant= True,
+                 init_type ="udv_si"):
+     self.data=data 
+     self.K = K 
+     self.X_l =X_l
+     self.X_f = X_f
+     self.max_K =max_K
+     self.prior_L= prior_L
+     self.prior_F = prior_F
+     self.type_noise = type_noise,
+     self.maxit= maxit
+     self.param_cebmf_l = param_cebmf_l
+     self.param_cebmf_f = param_cebmf_f
+     self.fit_constant =fit_constant
+     self.init_type = init_type
+     
+
+
+    def init_LF(self):
+        U, s, Vt = np.linalg.svd(self.data, full_matrices=False)
+        K = np.min([self.K, U.shape[1]])
+        # Keep only the top K singular values/vectors
+        U_k = U[:, :K]
+        D_k = np.diag(s[:K])
+        V_k = Vt[:K, :]
+        self.L = np.matmul(U_k,  D_k)
+        self.F =V_k.T
+        self.L2 = self.L**2
+        self.F2 = self.F**2
+        self.update_tau()
+    
+    def cal_expected_residuals(self): 
+        if self.K == 1:
+            # When K=1, directly calculate outer product for first and second moments
+            prod_square_firstmom = np.outer(self.L[:, 0] ** 2, self.F[:, 0] ** 2)
+            prod_sectmom = np.outer(self.L2[:, 0], self.F2[:, 0])
+        else:
+            # When K>1, sum the outer products across all K components
+            prod_square_firstmom = np.sum(
+                [np.outer(self.L[:, k] ** 2, self.F[:, k].T ** 2) for k in range(self.K)], axis=0
+            )
+            prod_sectmom = np.sum(
+                [np.outer(self.L2[:, k], self.F2[:, k]) for k in range(self.K)], axis=0
+            )
+
+        self.update_fitted_val()  # Update fitted values Y_fit
+
+        # Compute R2 as per the formula
+        R2 = (self.data- self.Y_fit) ** 2 - prod_square_firstmom + prod_sectmom
+        return R2
+
+    def update_fitted_val(self):
+        """Update Y_fit based on current factors."""
+        self.Y_fit= np.sum( [np.outer(   self.L[:, k]  ,  self.F[:, k]    ) for k in range( self.K)], axis=0)
+
+    def update_tau(self):
+        """Update tau based on the noise structure."""
+        R2 = self.cal_expected_residuals()
+
+        if self.type_noise == 'constant':
+            self.tau = np.full(self.Y.shape, 1 / np.mean(R2))
+        elif self.type_noise == 'row_wise':
+            row_means = np.mean(R2, axis=1)  # Mean across rows
+            self.tau = np.tile(1 / row_means, (self.Y.shape[1], 1)).T
+        elif self.type_noise == 'column_wise':
+            col_means = np.mean(R2, axis=0)  # Mean across columns
+            self.tau = np.tile(1 / col_means, (self.Y.shape[0], 1))
+
+def cEBMF( data, 
+                 K=5,
+                 X_l=None, 
+                 X_f=None, 
+                 max_K=100, 
+                 prior_L= "normal",
+                 prior_F= "normal",
+                 type_noise='constant' ,
+                 maxit= 100 ,
+                 param_cebmf_l =None,
+                 param_cebmf_f =None,
+                 fit_constant= True,
+                 init_type ="udv_si"):
+    """
+Covariate Moderated Empirical Bayes Matrix Factorization
+
+Parameters
+----------
+data : numpy.ndarray
+    A numerical matrix of size (N, P) representing the data to be factorized.
+
+X_l : numpy.ndarray
+    A matrix of size (N, J) containing covariates that affect the factors in the rows of Y.
+
+X_f : numpy.ndarray
+    A matrix of size (P, T) containing covariates that affect the factors in the columns of Y.
+
+mnreg_type : str, optional
+    Specifies the underlying learner for modeling heterogeneity within each topic. Two methods are available: 
+    - 'nnet': Uses a neural network model (default).
+    - 'keras': Uses a Keras-based neural network.
+    You can pass additional specifications for the 'nnet' model through the `param_nnet` argument and for the 
+    logistic SuSiE model through the `param_susie` argument.
+
+K : int
+    The number of factors to start with.
+
+type_noise : str, optional
+    Specifies the noise structure in the data. The following options are available:
+    - 'column_wise': Assumes noise is constant across columns.
+    - 'constant': Assumes noise is constant throughout the entire matrix.
+    - 'row_wise': Assumes noise is constant across rows.
+
+init_type : str, optional
+    Specifies the initialization method for the factorization. Available methods are:
+    - 'udv_si': Default method.
+    - 'random': Random initialization.
+    - 'flashier': Flashier initialization method.
+    - 'flashier_NMF': Non-negative Matrix Factorization initialization using Flashier.
+    - 'flashier_SNM': Sparse Non-negative Matrix initialization using Flashier.
+    - 'udv_si_svd': Initialization using Singular Value Decomposition.
+    - 'udv': UDV decomposition initialization.
+    - 'rand_udv': Random UDV decomposition initialization.
+
+maxit : int
+    The maximum number of iterations for the factorization algorithm.
+
+tol : float
+    The tolerance value for assessing convergence. The algorithm will stop if the improvement is below this threshold.
+
+ 
+
+"""
+
+    return cEBMF_object( data=data, 
+                 K=K,
+                 X_l=X_l, 
+                 X_f=X_f, 
+                 max_K=max_K, 
+                 prior_L= prior_L,
+                 prior_F= prior_F,
+                 type_noise=type_noise ,
+                 maxit= maxit ,
+                 param_cebmf_l =param_cebmf_l,
+                 param_cebmf_f =param_cebmf_f,
+                 fit_constant= fit_constant,
+                 init_type =init_type)
