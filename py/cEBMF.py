@@ -1,4 +1,11 @@
 import numpy as np
+import sys 
+import matplotlib.pyplot as plt
+
+# Add the path to utils.py
+sys.path.append(r"c:\Document\Serieux\Travail\python_work\cEBNM_torch\py")
+from ash import *
+
 
 class cEBMF_object :
     def __init__( 
@@ -69,18 +76,54 @@ class cEBMF_object :
         """Update Y_fit based on current factors."""
         self.Y_fit= np.sum( [np.outer(   self.L[:, k]  ,  self.F[:, k]    ) for k in range( self.K)], axis=0)
 
+    def cal_partial_residuals(self,k):
+        """Update Y_fit based on current factors."""
+        idx_loop = set(range(self.K))-{k}
+        self.Rk= self.data - np.sum( [np.outer(   self.L[:, j]  ,  self.F[:, j]    ) for j in  idx_loop], axis=0)
+
     def update_tau(self):
         """Update tau based on the noise structure."""
         R2 = self.cal_expected_residuals()
-
-        if self.type_noise == 'constant':
-            self.tau = np.full(self.Y.shape, 1 / np.mean(R2))
-        elif self.type_noise == 'row_wise':
+        if self.type_noise[0] == 'constant':
+            print('tamere')
+            self.tau = np.full(self.data.shape, 1 / np.mean(R2))
+        elif self.type_noise[0] == 'row_wise':
             row_means = np.mean(R2, axis=1)  # Mean across rows
-            self.tau = np.tile(1 / row_means, (self.Y.shape[1], 1)).T
-        elif self.type_noise == 'column_wise':
+            self.tau = np.tile(1 / row_means, (self.data.shape[1], 1)).T
+        elif self.type_noise[0] == 'column_wise':
             col_means = np.mean(R2, axis=0)  # Mean across columns
-            self.tau = np.tile(1 / col_means, (self.Y.shape[0], 1))
+            self.tau = np.tile(1 / col_means, (self.data.shape[0], 1))
+            
+            
+            
+    def update_loading_factor_k(self, k):
+        self.cal_partial_residuals(k=k)
+        lhat , s_l  = compute_hat_l_and_s_l(Z = self.Rk,
+                                                            nu = self.F[:,k] ,
+                                                            omega= self.F2[:,k], 
+                                                            tau= self.tau  )
+        
+        ash_obj = ash(betahat   =lhat,
+                      sebetahat =s_l ,
+                      prior     = self.prior_L
+                      )
+        self.L  [:,k] =ash_obj.post_mean
+        self.L2 [:,k] =ash_obj.post_mean2
+        
+        fhat , s_f  = compute_hat_f_and_s_f(Z = self.Rk,
+                                                            nu = self.L[:,k] ,
+                                                            omega= self.L2[:,k], 
+                                                            tau= self.tau  )
+        ash_obj = ash(betahat   = fhat, 
+                      sebetahat = s_f ,
+                      prior     = self.prior_F)
+        self.F  [:,k] =ash_obj.post_mean
+        self.F2 [:,k] =ash_obj.post_mean2
+    
+    def iter (self):
+        for k in range(self.K):
+            self.update_loading_factor_k(k=k)
+    
 
 def cEBMF( data, 
                  K=5,
@@ -159,3 +202,32 @@ tol : float
                  param_cebmf_f =param_cebmf_f,
                  fit_constant= fit_constant,
                  init_type =init_type)
+
+
+
+
+
+
+def compute_hat_l_and_s_l(Z, nu , omega, tau  ):
+   
+    # Compute \hat{l}
+    numerator_l_hat = np.sum(tau * Z * nu, axis=1)
+    denominator_l_hat = np.sum(tau * omega, axis=1)+1e-32
+    l_hat = numerator_l_hat / denominator_l_hat
+
+    # Compute s_l
+    s_l = (np.sum(tau * omega, axis=1)) **(-0.5)
+
+    return l_hat, s_l 
+
+def compute_hat_f_and_s_f(Z, nu, omega, tau ):
+    
+    # Compute \hat{f}
+    numerator_f_hat = np.sum(tau * Z  * nu[:,np.newaxis], axis=0)  # Sum over i (axis=0)
+    denominator_f_hat = np.sum(tau * omega[:,np.newaxis], axis=0) +1e-32 # Sum over i (axis=0)
+    f_hat = numerator_f_hat / denominator_f_hat
+
+    # Compute s_f
+    s_f2 = (np.sum(tau * omega[:,np.newaxis], axis=0)) **(-0.5)
+
+    return f_hat, s_f2 
