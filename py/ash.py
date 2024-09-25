@@ -45,8 +45,10 @@ def ash ( betahat,sebetahat, prior = "norm", mult=2,penalty=10,verbose= True):
         optimal_pi = optimize_pi( np.exp(L),
                                  penalty=penalty,
                                  verbose=verbose)  
+        log_pi=  np.tile(np.log(optimal_pi+1e-32), (betahat.shape[0],1))
+        
         out= posterior_mean_exp(betahat, sebetahat,
-                                 log_pi=np.log(optimal_pi+1e-32), 
+                                 log_pi=log_pi, 
                                  scale=scale)
         
     

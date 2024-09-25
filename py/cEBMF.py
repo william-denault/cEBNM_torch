@@ -101,7 +101,9 @@ class cEBMF_object :
                                                             nu = self.F[:,k] ,
                                                             omega= self.F2[:,k], 
                                                             tau= self.tau  )
-        
+        print( self.prior_L)
+        print(lhat.shape)
+        print(s_l.shape)
         ash_obj = ash(betahat   =lhat,
                       sebetahat =s_l ,
                       prior     = self.prior_L,
@@ -125,6 +127,7 @@ class cEBMF_object :
     def iter (self):
         for k in range(self.K):
             self.update_loading_factor_k(k=k)
+        self.update_tau()
     
 
 def cEBMF( data, 

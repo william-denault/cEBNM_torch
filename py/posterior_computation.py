@@ -20,6 +20,8 @@ class PosteriorMeanExp:
 
 def posterior_mean_exp(betahat, sebetahat, log_pi, scale):
     assignment = np.exp(log_pi)
+    print(log_pi)
+    print(assignment.shape)
     assignment = assignment / assignment.sum(axis=1, keepdims=True)
     mu = 0
     post_assign = np.zeros((betahat.shape[0], scale.shape[0]))
@@ -71,8 +73,7 @@ def wpost_exp ( x, s, w, scale):
      out =  np.concatenate(([1]  ,np.full( scale.shape[0],[0])))
      return out
     else:
-     a=1/scale[1:]
-     w = assignment
+     a=1/scale[1:] 
      a = 1 / scale[1:]  # Note: slicing in Python is zero-based, so [1:] starts from the second element
      lf = norm.logpdf(x, loc=0, scale=s)
      lg = np.log(a) + s**2 * a**2 / 2 - a * x + norm.logcdf(x / s - s * a)
@@ -93,10 +94,11 @@ class PosteriorMeanNorm:
         self.post_sd = post_sd
         
 def posterior_mean_norm(betahat, sebetahat, log_pi, scale):
-    
+     
     location = 0* scale
     data_loglik = get_data_loglik_normal (  betahat,sebetahat, location, scale)
     log_post_assignment = apply_log_sum_exp(data_loglik, log_pi)
+    print(log_post_assignment .shape)
     t_ind_Var =np.zeros((betahat.shape[0], scale.shape[0]))
  
     for i in range(t_ind_Var.shape[0]):
