@@ -15,8 +15,8 @@ class cEBMF_object :
                  X_l=None, 
                  X_f=None, 
                  max_K=100, 
-                 prior_L= "normal",
-                 prior_F= "normal",
+                 prior_L= "norm",
+                 prior_F= "norm",
                  type_noise='constant' ,
                  maxit= 100 ,
                  param_cebmf_l =None,
@@ -84,8 +84,7 @@ class cEBMF_object :
     def update_tau(self):
         """Update tau based on the noise structure."""
         R2 = self.cal_expected_residuals()
-        if self.type_noise[0] == 'constant':
-            print('tamere')
+        if self.type_noise[0] == 'constant': 
             self.tau = np.full(self.data.shape, 1 / np.mean(R2))
         elif self.type_noise[0] == 'row_wise':
             row_means = np.mean(R2, axis=1)  # Mean across rows
@@ -105,7 +104,8 @@ class cEBMF_object :
         
         ash_obj = ash(betahat   =lhat,
                       sebetahat =s_l ,
-                      prior     = self.prior_L
+                      prior     = self.prior_L,
+                      verbose=False
                       )
         self.L  [:,k] =ash_obj.post_mean
         self.L2 [:,k] =ash_obj.post_mean2
@@ -116,7 +116,9 @@ class cEBMF_object :
                                                             tau= self.tau  )
         ash_obj = ash(betahat   = fhat, 
                       sebetahat = s_f ,
-                      prior     = self.prior_F)
+                      prior     = self.prior_F,
+                      verbose=False
+                      )
         self.F  [:,k] =ash_obj.post_mean
         self.F2 [:,k] =ash_obj.post_mean2
     
@@ -130,8 +132,8 @@ def cEBMF( data,
                  X_l=None, 
                  X_f=None, 
                  max_K=100, 
-                 prior_L= "normal",
-                 prior_F= "normal",
+                 prior_L= "norm",
+                 prior_F= "norm",
                  type_noise='constant' ,
                  maxit= 100 ,
                  param_cebmf_l =None,
@@ -188,7 +190,7 @@ tol : float
  
 
 """
-
+    
     return cEBMF_object( data=data, 
                  K=K,
                  X_l=X_l, 
@@ -228,6 +230,6 @@ def compute_hat_f_and_s_f(Z, nu, omega, tau ):
     f_hat = numerator_f_hat / denominator_f_hat
 
     # Compute s_f
-    s_f2 = (np.sum(tau * omega[:,np.newaxis], axis=0)) **(-0.5)
+    s_f = (np.sum(tau * omega[:,np.newaxis], axis=0)) **(-0.5)
 
-    return f_hat, s_f2 
+    return f_hat, s_f

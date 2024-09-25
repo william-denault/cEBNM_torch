@@ -17,11 +17,11 @@ class ash_object:
         self.prior= prior
 
 
-def ash ( betahat,sebetahat, prior = "norm", mult=2,penalty=10):
+def ash ( betahat,sebetahat, prior = "norm", mult=2,penalty=10,verbose= True):
     
-    
-    
+     
     if prior== "norm":
+       
         scale=autoselect_scales_mix_norm(betahat  = betahat,
                                          sebetahat= sebetahat,
                                          mult=mult)
@@ -29,7 +29,9 @@ def ash ( betahat,sebetahat, prior = "norm", mult=2,penalty=10):
                                  sebetahat=sebetahat ,
                                  location=0*scale,
                                  scale=scale)
-        optimal_pi = optimize_pi( np.exp(L),penalty=penalty) 
+        optimal_pi = optimize_pi( np.exp(L),
+                                 penalty=penalty,
+                                 verbose=verbose) 
         out= posterior_mean_norm(betahat, sebetahat,
                                  log_pi=np.log(optimal_pi+1e-32), 
                                  scale=scale)
@@ -40,10 +42,14 @@ def ash ( betahat,sebetahat, prior = "norm", mult=2,penalty=10):
         L= get_data_loglik_exp(betahat=betahat ,
                                  sebetahat=sebetahat , 
                                  scale=scale)
-        optimal_pi = optimize_pi( np.exp(L),penalty=penalty)  
+        optimal_pi = optimize_pi( np.exp(L),
+                                 penalty=penalty,
+                                 verbose=verbose)  
         out= posterior_mean_exp(betahat, sebetahat,
                                  log_pi=np.log(optimal_pi+1e-32), 
                                  scale=scale)
+        
+    
     return ash_object(post_mean  = out.post_mean,
                       post_mean2 = out.post_mean2,
                       post_sd    = out.post_sd,

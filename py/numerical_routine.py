@@ -213,7 +213,7 @@ def sample_minibatch(L, batch_size):
 
 
 
-def optimize_pi(L, penalty, max_iters=100, tol=1e-6):
+def optimize_pi(L, penalty, max_iters=100, tol=1e-6, verbose= True):
     """
     EM algorithm from Stephens 2016 Biostatistics for optimizing pi subject to the simplex constraint that pi lies in the K-dimensional simplex.
     
@@ -242,7 +242,8 @@ def optimize_pi(L, penalty, max_iters=100, tol=1e-6):
 
         # Check for convergence
         if np.linalg.norm(pi_new - pi) < tol:
-            print(f"Converged after {iteration} iterations.")
+            if verbose:
+                print(f"Converged after {iteration} iterations.")
             break
 
         # Update pi
