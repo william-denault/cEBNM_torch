@@ -36,14 +36,14 @@ class cEBMF_object :
      self.param_cebmf_f = param_cebmf_f
      self.fit_constant =fit_constant
      self.init_type = init_type
-     
+     self.has_nan   =np.isnan(self.data).any()
 
 
     def init_LF(self):
         
-        has_nan = np.isnan(self.data).any()
+         
 
-        if has_nan:
+        if self.has_nan:
          print("The array contains missing values (NaN), generate initialization using iterive svd.")
          imputed_data = IterativeSVD().fit_transform(self.data)
           
@@ -100,12 +100,12 @@ class cEBMF_object :
         """Update tau based on the noise structure."""
         R2 = self.cal_expected_residuals()
         if self.type_noise[0] == 'constant': 
-            self.tau = np.full(self.data.shape, 1 / np.mean(R2))
+            self.tau = np.full(self.data.shape, 1 / np.nanmean(R2))
         elif self.type_noise[0] == 'row_wise':
-            row_means = np.mean(R2, axis=1)  # Mean across rows
+            row_means = np.nanmean(R2, axis=1)  # Mean across rows
             self.tau = np.tile(1 / row_means, (self.data.shape[1], 1)).T
         elif self.type_noise[0] == 'column_wise':
-            col_means = np.mean(R2, axis=0)  # Mean across columns
+            col_means = np.nanmean(R2, axis=0)  # Mean across columns
             self.tau = np.tile(1 / col_means, (self.data.shape[0], 1))
             
             
@@ -115,10 +115,9 @@ class cEBMF_object :
         lhat , s_l  = compute_hat_l_and_s_l(Z = self.Rk,
                                                             nu = self.F[:,k] ,
                                                             omega= self.F2[:,k], 
-                                                            tau= self.tau  )
-        print( self.prior_L)
-        print(lhat.shape)
-        print(s_l.shape)
+                                                            tau= self.tau,
+                                                            has_nan=self.has_nan)
+     
         ash_obj = ash(betahat   =lhat,
                       sebetahat =s_l ,
                       prior     = self.prior_L,
@@ -130,7 +129,8 @@ class cEBMF_object :
         fhat , s_f  = compute_hat_f_and_s_f(Z = self.Rk,
                                                             nu = self.L[:,k] ,
                                                             omega= self.L2[:,k], 
-                                                            tau= self.tau  )
+                                                            tau= self.tau  ,
+                                                            has_nan=self.has_nan)
         ash_obj = ash(betahat   = fhat, 
                       sebetahat = s_f ,
                       prior     = self.prior_F,
@@ -228,26 +228,56 @@ tol : float
 
 
 
-def compute_hat_l_and_s_l(Z, nu , omega, tau  ):
+def compute_hat_l_and_s_l(Z, nu, omega, tau, has_nan=False):
    
-    # Compute \hat{l}
-    numerator_l_hat = np.sum(tau * Z * nu, axis=1)
-    denominator_l_hat = np.sum(tau * omega, axis=1)+1e-32
+    if has_nan == False:
+        # Compute the numerator, broadcasting nu properly across columns (broadcast nu over axis=0)
+        numerator_l_hat = np.sum(tau * Z * nu, axis=1)
+        denominator_l_hat = np.sum(tau * omega, axis=1) + 1e-32
+    else:
+        # Fill nan values in Z with 0
+        Z_filled = np.nan_to_num(Z, nan=0)
+        # Set tau to 0 wherever Z has nan values
+        mask_nan_Z = np.isnan(Z)
+        tau_spiked = np.copy(tau)  # Make a copy of tau to modify
+        tau_spiked[mask_nan_Z] = 0
+
+        # Compute the numerator and denominator using the modified tau and Z
+        numerator_l_hat = np.sum(tau_spiked * Z_filled * nu, axis=1)
+        denominator_l_hat = np.sum(tau_spiked * omega, axis=1) + 1e-32
+
+    # Compute l_hat
     l_hat = numerator_l_hat / denominator_l_hat
 
     # Compute s_l
-    s_l = (np.sum(tau * omega, axis=1)) **(-0.5)
-
-    return l_hat, s_l 
-
-def compute_hat_f_and_s_f(Z, nu, omega, tau ):
+    s_l = (denominator_l_hat) ** (-0.5)
     
-    # Compute \hat{f}
-    numerator_f_hat = np.sum(tau * Z  * nu[:,np.newaxis], axis=0)  # Sum over i (axis=0)
-    denominator_f_hat = np.sum(tau * omega[:,np.newaxis], axis=0) +1e-32 # Sum over i (axis=0)
+    return l_hat, s_l
+
+def compute_hat_f_and_s_f(Z, nu, omega, tau, has_nan=False):
+    # Create a mask that identifies non-nan entries in Z
+    mask = ~np.isnan(Z)  # Assuming the mask is related to Z having no NaNs
+
+    if not has_nan:
+        # Compute the numerator, broadcasting nu properly across columns (broadcast nu over axis=0)
+        numerator_f_hat = np.sum(tau * Z * mask * nu[:, np.newaxis], axis=0)  # Sum over i (axis=0)
+        denominator_f_hat = np.sum(tau * mask * omega[:, np.newaxis], axis=0) + 1e-32  # Sum over i (axis=0)
+    else:
+        # Fill nan values in Z with 0
+        Z_filled = np.nan_to_num(Z, nan=0)
+        # Set tau to 0 wherever Z has nan values
+        mask_nan_Z = np.isnan(Z)
+        tau_spiked = np.copy(tau)  # Make a copy of tau to modify
+        tau_spiked[mask_nan_Z] = 0
+
+        # Compute the numerator and denominator using the modified tau and Z
+        numerator_f_hat = np.sum(tau_spiked * Z_filled * mask * nu[:, np.newaxis], axis=0)  # Sum over i (axis=0)
+        denominator_f_hat = np.sum(tau_spiked * mask * omega[:, np.newaxis], axis=0) + 1e-32  # Sum over i (axis=0)
+
+    # Compute f_hat
     f_hat = numerator_f_hat / denominator_f_hat
 
     # Compute s_f
-    s_f = (np.sum(tau * omega[:,np.newaxis], axis=0)) **(-0.5)
+    s_f = (denominator_f_hat) ** (-0.5)
 
     return f_hat, s_f
