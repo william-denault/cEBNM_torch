@@ -1,7 +1,7 @@
 import numpy as np
 import sys 
+from fancyimpute import IterativeSVD
 import matplotlib.pyplot as plt
-
 # Add the path to utils.py
 sys.path.append(r"c:\Document\Serieux\Travail\python_work\cEBNM_torch\py")
 from ash import *
@@ -40,7 +40,22 @@ class cEBMF_object :
 
 
     def init_LF(self):
-        U, s, Vt = np.linalg.svd(self.data, full_matrices=False)
+        
+        has_nan = np.isnan(self.data).any()
+
+        if has_nan:
+         print("The array contains missing values (NaN), generate initialization using iterive svd.")
+         imputed_data = IterativeSVD().fit_transform(self.data)
+          
+         #imputer = SimpleImputer(missing_values=np.nan, strategy='mean')
+         #imputed_data = imputer.fit_transform(self.data)
+         
+         U, s, Vt = np.linalg.svd(imputed_data, full_matrices=False)
+        else:
+         print("The array does not contain any missing values.")
+         U, s, Vt = np.linalg.svd(self.data, full_matrices=False)
+        
+       
         K = np.min([self.K, U.shape[1]])
         # Keep only the top K singular values/vectors
         U_k = U[:, :K]
