@@ -8,16 +8,17 @@ from numerical_routine import *
 from posterior_computation import *
 
 class ash_object:
-    def __init__(self, post_mean, post_mean2, post_sd, scale, pi, prior):
+    def __init__(self, post_mean, post_mean2, post_sd, scale, pi, prior, log_lik=0):
         self.post_mean = post_mean
         self.post_mean2 = post_mean2
         self.post_sd = post_sd
         self.scale= scale
         self.pi =pi 
         self.prior= prior
+        self.log_lik = log_lik
 
 
-def ash ( betahat,sebetahat, prior = "norm", mult=2,penalty=10,verbose= True):
+def ash ( betahat,sebetahat, prior = "norm", mult=np.sqrt(2),penalty=10,verbose= True):
     
      
     if prior== "norm":
@@ -50,11 +51,14 @@ def ash ( betahat,sebetahat, prior = "norm", mult=2,penalty=10,verbose= True):
         out= posterior_mean_exp(betahat, sebetahat,
                                  log_pi=log_pi, 
                                  scale=scale)
-        
+    
+    log_lik =    np.sum( np.log( np.sum( np.exp(L) * np.exp(optimal_pi) , axis=0)))
+    
     
     return ash_object(post_mean  = out.post_mean,
                       post_mean2 = out.post_mean2,
                       post_sd    = out.post_sd,
                       scale      = scale,
                       pi         = optimal_pi,
-                      prior      = prior )
+                      prior      = prior ,
+                      log_lik    = log_lik)

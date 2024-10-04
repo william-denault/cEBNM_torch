@@ -22,7 +22,8 @@ class cEBMF_object :
                  param_cebmf_l =None,
                  param_cebmf_f =None,
                  fit_constant= True,
-                 init_type ="udv_si"):
+                 init_type ="udv_si",
+                 ELBO= 0 ):
      self.data=data 
      self.K = K 
      self.X_l =X_l
@@ -34,9 +35,12 @@ class cEBMF_object :
      self.maxit= maxit
      self.param_cebmf_l = param_cebmf_l
      self.param_cebmf_f = param_cebmf_f
+     self.kl_l          =  np.zeros_like(range(self.K))
+     self.kl_f          =  np.zeros_like(range(self.K))
      self.fit_constant =fit_constant
      self.init_type = init_type
      self.has_nan   =np.isnan(self.data).any()
+     self.ELBO        = ELBO
 
 
     def init_LF(self):
@@ -126,6 +130,12 @@ class cEBMF_object :
         self.L  [:,k] =ash_obj.post_mean
         self.L2 [:,k] =ash_obj.post_mean2
         
+        self.kl_l[k]=ash_obj.log_lik-   normal_means_loglik(lhat , 
+                                           s_l,
+                                           ash_obj.post_mean,
+                                           ash_obj.post_mean2
+                                           )
+        
         fhat , s_f  = compute_hat_f_and_s_f(Z = self.Rk,
                                                             nu = self.L[:,k] ,
                                                             omega= self.L2[:,k], 
@@ -138,26 +148,43 @@ class cEBMF_object :
                       )
         self.F  [:,k] =ash_obj.post_mean
         self.F2 [:,k] =ash_obj.post_mean2
-    
+        self.kl_f[k]= ash_obj.log_lik-  normal_means_loglik(fhat , 
+                                           s_f,
+                                           ash_obj.post_mean,
+                                           ash_obj.post_mean2
+                                           )
     def iter (self):
         for k in range(self.K):
             self.update_loading_factor_k(k=k)
         self.update_tau()
+       # self.cal_obj()
     
-
-def cEBMF( data, 
-                 K=5,
-                 X_l=None, 
-                 X_f=None, 
-                 max_K=100, 
-                 prior_L= "norm",
-                 prior_F= "norm",
-                 type_noise='constant' ,
-                 maxit= 100 ,
-                 param_cebmf_l =None,
-                 param_cebmf_f =None,
-                 fit_constant= True,
-                 init_type ="udv_si"):
+    
+    
+    
+    #def cal_obj(self):
+       # KL = np.sum(self.kl_f)+np.sum  (self.kl_l)
+       # self.tau
+       # obj= - 0.5 * sum(n.nonmissing * (log(2 * pi)
+       #                                   - log(tau) + tau / est.tau))
+        
+        #self.ELBO.append 
+        
+def cEBMF(
+    data, 
+    K=5,
+    X_l=None, 
+    X_f=None, 
+    max_K=100, 
+    prior_L="norm",
+    prior_F="norm",
+    type_noise='constant',
+    maxit=100,
+    param_cebmf_l=None,
+    param_cebmf_f=None,
+    fit_constant=True,
+    init_type="udv_si"
+):
     """
 Covariate Moderated Empirical Bayes Matrix Factorization
 
@@ -228,6 +255,7 @@ tol : float
 
 
 
+
 def compute_hat_l_and_s_l(Z, nu, omega, tau, has_nan=False):
    
     if has_nan == False:
@@ -281,3 +309,20 @@ def compute_hat_f_and_s_f(Z, nu, omega, tau, has_nan=False):
     s_f = (denominator_f_hat) ** (-0.5)
 
     return f_hat, s_f
+
+import numpy as np
+
+def normal_means_loglik(x, s, Et, Et2):
+    # Create a boolean index for valid entries where s is finite and greater than 0
+    idx = np.isfinite(s) & (s > 0)
+    
+    # Filter arrays based on valid index
+    x = x[idx]
+    s = s[idx]
+    Et = Et[idx]
+    Et2 = Et2[idx]
+    
+    # Calculate and return the log-likelihood
+    return -0.5 * np.sum(np.log(2 * np.pi * s**2) + (1 / s**2) * (Et2 - 2 * x * Et + x**2))
+
+
