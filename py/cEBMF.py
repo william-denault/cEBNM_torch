@@ -148,6 +148,8 @@ class cEBMF_object :
                       )
         self.F  [:,k] =ash_obj.post_mean
         self.F2 [:,k] =ash_obj.post_mean2
+        
+        
         self.kl_f[k]= ash_obj.log_lik-  normal_means_loglik(fhat , 
                                            s_f,
                                            ash_obj.post_mean,
