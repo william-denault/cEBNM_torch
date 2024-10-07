@@ -52,7 +52,9 @@ def ash ( betahat,sebetahat, prior = "norm", mult=np.sqrt(2),penalty=10,verbose=
                                  log_pi=log_pi, 
                                  scale=scale)
     
-    log_lik =    np.sum( np.log( np.sum( np.exp(L) * np.exp(optimal_pi) , axis=0)))
+    log_lik =    np.sum(np.log(np.sum(np.exp(L)*optimal_pi, axis=1)))
+    
+    
     
     
     return ash_object(post_mean  = out.post_mean,

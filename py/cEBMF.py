@@ -24,24 +24,25 @@ class cEBMF_object :
                  fit_constant= True,
                  init_type ="udv_si",
                  ELBO= 0 ):
-     self.data=data 
-     self.K = K 
-     self.X_l =X_l
-     self.X_f = X_f
-     self.max_K =max_K
-     self.prior_L= prior_L
-     self.prior_F = prior_F
-     self.type_noise = type_noise,
-     self.maxit= maxit
+     self.data          = data 
+     self.K             = K 
+     self.X_l           = X_l
+     self.X_f           = X_f
+     self.max_K         = max_K
+     self.prior_L       = prior_L
+     self.prior_F       = prior_F
+     self.type_noise    = type_noise,
+     self.maxit         = maxit
      self.param_cebmf_l = param_cebmf_l
      self.param_cebmf_f = param_cebmf_f
      self.kl_l          =  np.zeros_like(range(self.K))
      self.kl_f          =  np.zeros_like(range(self.K))
-     self.fit_constant =fit_constant
-     self.init_type = init_type
-     self.has_nan   =np.isnan(self.data).any()
-     self.ELBO        = ELBO
-
+     self.fit_constant  = fit_constant
+     self.init_type     = init_type
+     self.has_nan       =np.isnan(self.data).any()
+     self.ELBO          = ELBO
+     self.n_nonmissing  = np.prod(data.shape) -np.sum (  np.isnan( data))
+     self.obj           =  [np.inf]
 
     def init_LF(self):
         
@@ -130,10 +131,10 @@ class cEBMF_object :
         self.L  [:,k] =ash_obj.post_mean
         self.L2 [:,k] =ash_obj.post_mean2
         
-        self.kl_l[k]=ash_obj.log_lik-   normal_means_loglik(lhat , 
-                                           s_l,
-                                           ash_obj.post_mean,
-                                           ash_obj.post_mean2
+        self.kl_l[k]=ash_obj.log_lik-   normal_means_loglik(x=lhat , 
+                                            s=  s_l,
+                                            Et=ash_obj.post_mean,
+                                            Et2= ash_obj.post_mean2
                                            )
         
         fhat , s_f  = compute_hat_f_and_s_f(Z = self.Rk,
@@ -150,17 +151,36 @@ class cEBMF_object :
         self.F2 [:,k] =ash_obj.post_mean2
         
         
-        self.kl_f[k]= ash_obj.log_lik-  normal_means_loglik(fhat , 
-                                           s_f,
-                                           ash_obj.post_mean,
-                                           ash_obj.post_mean2
-                                           )
+        self.kl_f[k]= ash_obj.log_lik-  normal_means_loglik(x=fhat , 
+                                           s= s_f,
+                                           Et=ash_obj.post_mean,
+                                           Et2= ash_obj.post_mean2
+                                           ) 
+        
+        
+        
     def iter (self):
         for k in range(self.K):
             self.update_loading_factor_k(k=k)
         self.update_tau()
-       # self.cal_obj()
-    
+        self.cal_obj()
+        
+        
+        
+    def cal_obj(self):
+        KL =  sum( self.kl_f)+ sum(self.kl_l)
+        if self.type_noise[0] == 'constant': 
+            tau = self.tau[0,0]
+            n_tau =1
+        elif self.type_noise[0] == 'row_wise':
+            tau =self.tau[:,0]
+            n_tau =self.data.shape[1]
+        elif self.type_noise[0] == 'column_wise':
+            tau =self.tau[0,:]
+            n_tau =self.data.shape[2]
+        
+        obj= KL -0.5*np.sum (self.n_nonmissing*( np.log( 2*np.pi ) - np.log(tau + 1e-32)+ n_tau ))
+        self.obj.append(obj)
     
     
     
@@ -317,7 +337,7 @@ import numpy as np
 def normal_means_loglik(x, s, Et, Et2):
     # Create a boolean index for valid entries where s is finite and greater than 0
     idx = np.isfinite(s) & (s > 0)
-    
+ 
     # Filter arrays based on valid index
     x = x[idx]
     s = s[idx]
