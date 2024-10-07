@@ -233,7 +233,7 @@ def optimize_pi(L, penalty, max_iters=100, tol=1e-6, verbose= True):
     # EM algorithm iterations
     for iteration in range(max_iters):
         # E-Step: calculate responsibilities (w_kj)
-        w =  pi[:, np.newaxis] * L.T   # Element-wise multiplication (pi_k * l_kj)
+        w =  pi[:, np.newaxis] * L.T   +1e-32 # Element-wise multiplication (pi_k * l_kj)
         w = w / w.sum(axis=0, keepdims=True)  # Normalize by sum over k for each j
 
         # M-Step: update pi
