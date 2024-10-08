@@ -22,8 +22,7 @@ class cEBMF_object :
                  param_cebmf_l =None,
                  param_cebmf_f =None,
                  fit_constant= True,
-                 init_type ="udv_si",
-                 ELBO= 0 ):
+                 init_type ="udv_si" ):
      self.data          = data 
      self.K             = K 
      self.X_l           = X_l
@@ -39,8 +38,7 @@ class cEBMF_object :
      self.kl_f          =  np.zeros_like(range(self.K))
      self.fit_constant  = fit_constant
      self.init_type     = init_type
-     self.has_nan       =np.isnan(self.data).any()
-     self.ELBO          = ELBO
+     self.has_nan       =np.isnan(self.data).any() 
      self.n_nonmissing  = np.prod(data.shape) -np.sum (  np.isnan( data))
      self.obj           =  [np.inf]
 
@@ -182,16 +180,7 @@ class cEBMF_object :
         obj= KL -0.5*np.sum (self.n_nonmissing*( np.log( 2*np.pi ) - np.log(tau + 1e-32)+ n_tau ))
         self.obj.append(obj)
     
-    
-    
-    #def cal_obj(self):
-       # KL = np.sum(self.kl_f)+np.sum  (self.kl_l)
-       # self.tau
-       # obj= - 0.5 * sum(n.nonmissing * (log(2 * pi)
-       #                                   - log(tau) + tau / est.tau))
-        
-        #self.ELBO.append 
-        
+     
 def cEBMF(
     data, 
     K=5,
@@ -294,13 +283,13 @@ def compute_hat_l_and_s_l(Z, nu, omega, tau, has_nan=False):
 
         # Compute the numerator and denominator using the modified tau and Z
         numerator_l_hat = np.sum(tau_spiked * Z_filled * nu, axis=1)
-        denominator_l_hat = np.sum(tau_spiked * omega, axis=1) + 1e-32
+        denominator_l_hat = np.sum(tau_spiked * omega, axis=1)
 
     # Compute l_hat
-    l_hat = numerator_l_hat / denominator_l_hat
+    l_hat = numerator_l_hat / (denominator_l_hat+ 1e-32 )
 
     # Compute s_l
-    s_l = (denominator_l_hat) ** (-0.5)
+    s_l = (denominator_l_hat) ** (-0.5)+ 1e-32 
     
     return l_hat, s_l
 
@@ -322,13 +311,13 @@ def compute_hat_f_and_s_f(Z, nu, omega, tau, has_nan=False):
 
         # Compute the numerator and denominator using the modified tau and Z
         numerator_f_hat = np.sum(tau_spiked * Z_filled * mask * nu[:, np.newaxis], axis=0)  # Sum over i (axis=0)
-        denominator_f_hat = np.sum(tau_spiked * mask * omega[:, np.newaxis], axis=0) + 1e-32  # Sum over i (axis=0)
+        denominator_f_hat = np.sum(tau_spiked * mask * omega[:, np.newaxis], axis=0)  # Sum over i (axis=0)
 
     # Compute f_hat
-    f_hat = numerator_f_hat / denominator_f_hat
+    f_hat = numerator_f_hat /( denominator_f_hat+ 1e-32 )
 
     # Compute s_f
-    s_f = (denominator_f_hat) ** (-0.5)
+    s_f = (denominator_f_hat) ** (-0.5)+ 1e-32 
 
     return f_hat, s_f
 
