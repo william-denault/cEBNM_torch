@@ -177,7 +177,7 @@ class cEBMF_object :
             tau =self.tau[0,:]
             n_tau =self.data.shape[2]
         
-        obj= KL -0.5*np.sum (self.n_nonmissing*( np.log( 2*np.pi ) - np.log(tau + 1e-32)+ n_tau ))
+        obj= KL -0.5*np.sum (self.n_nonmissing*( np.log( 2*np.pi ) - np.log(tau + 1e-8)+ n_tau ))
         self.obj.append(obj)
     
      
@@ -272,7 +272,7 @@ def compute_hat_l_and_s_l(Z, nu, omega, tau, has_nan=False):
     if has_nan == False:
         # Compute the numerator, broadcasting nu properly across columns (broadcast nu over axis=0)
         numerator_l_hat = np.sum(tau * Z * nu, axis=1)
-        denominator_l_hat = np.sum(tau * omega, axis=1) + 1e-32
+        denominator_l_hat = np.sum(tau * omega, axis=1) + 1e-8
     else:
         # Fill nan values in Z with 0
         Z_filled = np.nan_to_num(Z, nan=0)
@@ -286,11 +286,18 @@ def compute_hat_l_and_s_l(Z, nu, omega, tau, has_nan=False):
         denominator_l_hat = np.sum(tau_spiked * omega, axis=1)
 
     # Compute l_hat
-    l_hat = numerator_l_hat / (denominator_l_hat+ 1e-32 )
+    l_hat = numerator_l_hat / (denominator_l_hat+1e-6)
 
     # Compute s_l
-    s_l = (denominator_l_hat) ** (-0.5)+ 1e-32 
     
+    s_l = (denominator_l_hat) ** (-0.5)+1e-6
+    if  denominator_l_hat.any()==0:
+         idx=  np.where((denominator_l_hat == 0))[0]
+         s_l[idx]= 10*np.abs(denominator_l_hat[idx]) +1e-8
+    if np.isinf(s_l).any():
+         idx=  np.where(np.isinf(s_l))[0]
+         s_l[idx]= 10*np.abs(l_hat[idx]) +1e-8
+ 
     return l_hat, s_l
 
 def compute_hat_f_and_s_f(Z, nu, omega, tau, has_nan=False):
@@ -300,7 +307,7 @@ def compute_hat_f_and_s_f(Z, nu, omega, tau, has_nan=False):
     if not has_nan:
         # Compute the numerator, broadcasting nu properly across columns (broadcast nu over axis=0)
         numerator_f_hat = np.sum(tau * Z * mask * nu[:, np.newaxis], axis=0)  # Sum over i (axis=0)
-        denominator_f_hat = np.sum(tau * mask * omega[:, np.newaxis], axis=0) + 1e-32  # Sum over i (axis=0)
+        denominator_f_hat = np.sum(tau * mask * omega[:, np.newaxis], axis=0) +1e-6 # Sum over i (axis=0)
     else:
         # Fill nan values in Z with 0
         Z_filled = np.nan_to_num(Z, nan=0)
@@ -314,10 +321,16 @@ def compute_hat_f_and_s_f(Z, nu, omega, tau, has_nan=False):
         denominator_f_hat = np.sum(tau_spiked * mask * omega[:, np.newaxis], axis=0)  # Sum over i (axis=0)
 
     # Compute f_hat
-    f_hat = numerator_f_hat /( denominator_f_hat+ 1e-32 )
+    f_hat = numerator_f_hat /( denominator_f_hat+1e-6)
 
     # Compute s_f
-    s_f = (denominator_f_hat) ** (-0.5)+ 1e-32 
+    s_f = (denominator_f_hat) ** (-0.5)+1e-6    
+    if  denominator_f_hat.any()==0:
+        idx=  np.where((denominator_f_hat == 0))[0]
+        s_f[idx]= 10*np.abs(f_hat[idx]) +1e-8
+    if np.isinf(s_f).any():
+         idx=  np.where(np.isinf(s_f))[0]
+         s_f[idx]= 10*np.abs(f_hat[idx]) +1e-8
 
     return f_hat, s_f
 
