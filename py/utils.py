@@ -28,7 +28,7 @@ def autoselect_scales_mix_norm(betahat, sebetahat, max_class=None, mult=2):
     return out
      
 def autoselect_scales_mix_exp(betahat, sebetahat, max_class=None , mult=1.5,tt=1.5):
-    sigmaamin = np.min(sebetahat) / 10
+    sigmaamin = np.max( [np.min(sebetahat) / 10 , 1e-3])
     if np.all(betahat**2 < sebetahat**2):  # Fix the typo and ensure logical comparison
         sigmaamax = 8 * sigmaamin
     else:

@@ -39,7 +39,8 @@ def my_etruncnorm(a, b, mean=0, sd=1):
     
     dnorm_diff = logscale_sub(stats.norm.logpdf(beta), stats.norm.logpdf(alpha))
     pnorm_diff = logscale_sub(stats.norm.logcdf(beta), stats.norm.logcdf(alpha))
-    scaled_res = -np.exp(dnorm_diff - pnorm_diff)
+ 
+    scaled_res = -np.exp( np.clip( dnorm_diff - pnorm_diff, None, 700))
     
     endpts_equal = np.isinf(pnorm_diff)
     scaled_res[endpts_equal] = (alpha[endpts_equal] + beta[endpts_equal]) / 2
@@ -82,8 +83,8 @@ def my_e2truncnorm(a, b, mean=0, sd=1):
         mean  =  abs(mean)
     
     pnorm_diff = logscale_sub(stats.norm.logcdf(beta), stats.norm.logcdf(alpha))
-    alpha_frac = alpha * np.exp(stats.norm.logpdf(alpha) - pnorm_diff)
-    beta_frac = beta * np.exp(stats.norm.logpdf(beta) - pnorm_diff)
+    alpha_frac = alpha * np.exp( np.clip(stats.norm.logpdf(alpha) - pnorm_diff, None, 700))
+    beta_frac = beta * np.exp( np.clip(stats.norm.logpdf(beta) - pnorm_diff, None, 700))
     
     # Handle inf and nan values in alpha_frac and beta_frac
     alpha_frac[np.isnan(alpha_frac) | np.isinf(alpha_frac)] = 0
@@ -255,3 +256,45 @@ def optimize_pi(L, penalty, max_iters=100, tol=1e-6, verbose= True):
 # L is your likelihood matrix (shape n x K)
 # penalty is a scalar penalty parameter, for example: penalty = 0.1
 # pi = em_algorithm(L, penalty)
+def optimize_pi_logL(logL, penalty, max_iters=100, tol=1e-6, verbose=True):
+    """
+    EM algorithm based on the log likelihood for optimizing pi subject to the simplex constraint 
+    that pi lies in the K-dimensional simplex.
+
+    Parameters:
+    logL (numpy.ndarray): The log-likelihood matrix with shape (n, K) where logL[j, k] corresponds to log(l_kj).
+    penalty (float): The penalty parameter.
+    max_iters (int): The maximum number of iterations for optimization.
+    tol (float): The tolerance for convergence.
+    
+    Returns:
+    numpy.ndarray: The optimized pi values as a 1D numpy array.
+    """
+    n, K = logL.shape  # n: number of data points, K: number of components
+    pi = np.exp(-np.arange(0, K)) / np.sum(np.exp(-np.arange(0, K)))  # Initialize pi uniformly
+    vec_pen = np.ones_like(pi)
+    vec_pen[0] = penalty
+    epsilon = 1e-10  # Small constant to avoid log(0)
+    
+    # EM algorithm iterations
+    for iteration in range(max_iters):
+        # E-Step: calculate responsibilities (w_kj)
+        log_w = np.log(pi[:, np.newaxis] + epsilon) + logL.T  # Avoid log(0) by adding epsilon
+        log_w = log_w - np.max(log_w, axis=0, keepdims=True)  # For numerical stability (log-sum-exp trick)
+        w = np.exp(log_w)
+        w = w / w.sum(axis=0, keepdims=True)  # Normalize by sum over k for each j
+
+        # M-Step: update pi
+        n_k = w.sum(axis=1) + vec_pen - 1  # Apply penalty
+        pi_new = n_k / n_k.sum()  # Normalize to make sure sum(pi) = 1
+
+        # Check for convergence
+        if np.linalg.norm(pi_new - pi) < tol:
+            if verbose:
+                print(f"Converged after {iteration} iterations.")
+            break
+
+        # Update pi
+        pi = pi_new
+
+    return pi

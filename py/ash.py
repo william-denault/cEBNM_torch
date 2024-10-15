@@ -31,7 +31,7 @@ def ash ( betahat,sebetahat, prior = "norm", mult=np.sqrt(2),penalty=10,verbose=
                                  sebetahat=sebetahat ,
                                  location=0*scale,
                                  scale=scale)
-        optimal_pi = optimize_pi( np.exp(L),
+        optimal_pi = optimize_pi_logL(  logL =L,
                                  penalty=penalty,
                                  verbose=verbose) 
         out= posterior_mean_norm(betahat, sebetahat,
@@ -44,7 +44,7 @@ def ash ( betahat,sebetahat, prior = "norm", mult=np.sqrt(2),penalty=10,verbose=
         L= get_data_loglik_exp(betahat=betahat ,
                                  sebetahat=sebetahat , 
                                  scale=scale)
-        optimal_pi = optimize_pi( np.exp(L),
+        optimal_pi = optimize_pi_logL(  logL =L,
                                  penalty=penalty,
                                  verbose=verbose)  
         log_pi=  np.tile(np.log(optimal_pi+1e-32), (betahat.shape[0],1))
