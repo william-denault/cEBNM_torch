@@ -89,8 +89,11 @@ class PosteriorMeanNorm:
         self.post_mean2 = post_mean2
         self.post_sd = post_sd
         
+        
+        
+        
 def posterior_mean_norm(betahat, sebetahat, log_pi, scale, location=None):
-     
+     #location ois wether a 1 d np with same length as scale array or n by length scale np array 
     if location is None:
         location = 0* scale
         
@@ -100,6 +103,8 @@ def posterior_mean_norm(betahat, sebetahat, log_pi, scale, location=None):
     log_post_assignment = apply_log_sum_exp(data_loglik, log_pi)
     t_ind_Var =np.zeros((betahat.shape[0], scale.shape[0]))
  
+   
+        
     for i in range(t_ind_Var.shape[0]):
         t_ind_Var[i , ]= np.concatenate(
                                         ([0], 
@@ -107,9 +112,13 @@ def posterior_mean_norm(betahat, sebetahat, log_pi, scale, location=None):
                                         )#assume that first entry of scale is 0
         
     temp=np.zeros((betahat.shape[0], scale.shape[0]))
- 
-    for i in range(temp.shape[0]):
+    if len(location.shape)==1:
+        for i in range(temp.shape[0]):
             temp[i,] = (t_ind_Var[i,]/(sebetahat[i]**2))*(betahat[i] )+ location*(1-t_ind_Var[i,]/(sebetahat[i]**2))
+    elif len(location.shape)==2: 
+        for i in range(temp.shape[0]):
+            temp[i,] = (t_ind_Var[i,]/(sebetahat[i]**2))*(betahat[i] )+ location[i,]*(1-t_ind_Var[i,]/(sebetahat[i]**2))
+    
 
     post_mean  = np.sum ( np.exp(log_post_assignment)* temp, axis=1)
     post_mean2 = np.sum ( np.exp(log_post_assignment)*( t_ind_Var+ temp**2), axis=1)
