@@ -89,9 +89,13 @@ class PosteriorMeanNorm:
         self.post_mean2 = post_mean2
         self.post_sd = post_sd
         
-def posterior_mean_norm(betahat, sebetahat, log_pi, scale):
+def posterior_mean_norm(betahat, sebetahat, log_pi, scale, location=None):
      
-    location = 0* scale
+    if location is None:
+        location = 0* scale
+        
+        
+   
     data_loglik = get_data_loglik_normal (  betahat,sebetahat, location, scale)
     log_post_assignment = apply_log_sum_exp(data_loglik, log_pi)
     t_ind_Var =np.zeros((betahat.shape[0], scale.shape[0]))
@@ -103,9 +107,9 @@ def posterior_mean_norm(betahat, sebetahat, log_pi, scale):
                                         )#assume that first entry of scale is 0
         
     temp=np.zeros((betahat.shape[0], scale.shape[0]))
-
+ 
     for i in range(temp.shape[0]):
-        temp[i,] = (t_ind_Var[i,]/(sebetahat[i]**2))*betahat[i]
+            temp[i,] = (t_ind_Var[i,]/(sebetahat[i]**2))*(betahat[i] )+ location*(1-t_ind_Var[i,]/(sebetahat[i]**2))
 
     post_mean  = np.sum ( np.exp(log_post_assignment)* temp, axis=1)
     post_mean2 = np.sum ( np.exp(log_post_assignment)*( t_ind_Var+ temp**2), axis=1)
