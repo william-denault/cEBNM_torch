@@ -104,12 +104,17 @@ def posterior_mean_norm(betahat, sebetahat, log_pi, scale, location=None):
     t_ind_Var =np.zeros((betahat.shape[0], scale.shape[0]))
  
    
-        
-    for i in range(t_ind_Var.shape[0]):
-        t_ind_Var[i , ]= np.concatenate(
-                                        ([0], 
-                                         1/((1/sebetahat[i]**2)+ (1/scale[1:]**2)) )
-                                        )#assume that first entry of scale is 0
+    if(scale[0]==0):
+        for i in range(t_ind_Var.shape[0]):
+            t_ind_Var[i , ]= np.concatenate(
+                                            ([0], 
+                                             1/((1/sebetahat[i]**2)+ (1/scale[1:]**2)) )
+                                            )#assume that first entry of scale is 0
+    else:
+        for i in range(t_ind_Var.shape[0]):
+            t_ind_Var[i , ]= 1/((1/sebetahat[i]**2)+ (1/scale **2)) 
+           
+    
         
     temp=np.zeros((betahat.shape[0], scale.shape[0]))
     if len(location.shape)==1:
