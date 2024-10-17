@@ -121,19 +121,35 @@ class cEBMF_object :
                                                             tau= self.tau,
                                                             has_nan=self.has_nan)
      
-        ash_obj = ash(betahat   =lhat,
+        if self.prior_L == "norm" | self.prior_L == "exp":
+            ash_obj = ash(betahat   =lhat,
                       sebetahat =s_l ,
                       prior     = self.prior_L,
                       verbose=False
                       )
-        self.L  [:,k] =ash_obj.post_mean
-        self.L2 [:,k] =ash_obj.post_mean2
+            self.L  [:,k] =ash_obj.post_mean
+            self.L2 [:,k] =ash_obj.post_mean2
         
-        self.kl_l[k]=ash_obj.log_lik-   normal_means_loglik(x=lhat , 
+            self.kl_l[k]=ash_obj.log_lik-   normal_means_loglik(x=lhat , 
                                             s=  s_l,
                                             Et=ash_obj.post_mean,
                                             Et2= ash_obj.post_mean2
                                            )
+        if self.prior_L == "emdn":
+            emdn = ash(betahat   =lhat,
+                      sebetahat =s_l ,
+                      prior     = self.prior_L,
+                      verbose=False
+                      )
+            self.L  [:,k] =emdn.post_mean
+            self.L2 [:,k] =emdn.post_mean2
+        
+            self.kl_l[k]=ash_obj.log_lik-   normal_means_loglik(x=lhat , 
+                                            s=  s_l,
+                                            Et=emdn.post_mean,
+                                            Et2= emdn.post_mean2
+                                           )
+        
         
         fhat , s_f  = compute_hat_f_and_s_f(Z = self.Rk,
                                                             nu = self.L[:,k] ,
