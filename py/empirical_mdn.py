@@ -61,7 +61,7 @@ class EmdnPosteriorMeanNorm:
         self.post_sd = post_sd
 
 # Main function to train the model and compute posterior means, mean^2, and standard deviations
-def emdn_posterior_means(X, betahat, sebetahat, n_epochs=200, n_gaussians=5, hidden_dim=64, batch_size=128, lr=0.001):
+def emdn_posterior_means(X, betahat, sebetahat, n_epochs=50, n_gaussians=5, hidden_dim=64, batch_size=128, lr=0.001):
     # Standardize X
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
@@ -96,6 +96,8 @@ def emdn_posterior_means(X, betahat, sebetahat, n_epochs=200, n_gaussians=5, hid
         train_loader = DataLoader(dataset, batch_size=len(dataset), shuffle=False)
         for X_batch, _, _ in train_loader:
             pi, mu, log_sigma = model(X_batch)  # Predict pi, mu, and log_sigma
+            #final_loss = mdn_loss_with_varying_noise(pi, mu, log_sigma, betahat_batch, sebetahat_batch).item()
+
 
     # Convert predictions to numpy arrays
     pi_np = pi.numpy()

@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 # Add the path to utils.py
 sys.path.append(r"c:\Document\Serieux\Travail\python_work\cEBNM_torch\py")
 from ash import *
-
+from empirical_mdn import *
 
 class cEBMF_object :
     def __init__( 
@@ -121,7 +121,7 @@ class cEBMF_object :
                                                             tau= self.tau,
                                                             has_nan=self.has_nan)
      
-        if self.prior_L == "norm" | self.prior_L == "exp":
+        if self.prior_L == "norm" or self.prior_L == "exp":
             ash_obj = ash(betahat   =lhat,
                       sebetahat =s_l ,
                       prior     = self.prior_L,
@@ -136,10 +136,10 @@ class cEBMF_object :
                                             Et2= ash_obj.post_mean2
                                            )
         if self.prior_L == "emdn":
-            emdn = emdn ( X =self.X_l 
+            emdn =emdn_posterior_means ( X =self.X_l ,
                              betahat   =lhat,
                              sebetahat =s_l  
-                      )
+                        )
             self.L  [:,k] =emdn.post_mean
             self.L2 [:,k] =emdn.post_mean2
         
@@ -155,20 +155,28 @@ class cEBMF_object :
                                                             omega= self.L2[:,k], 
                                                             tau= self.tau  ,
                                                             has_nan=self.has_nan)
-        ash_obj = ash(betahat   = fhat, 
-                      sebetahat = s_f ,
-                      prior     = self.prior_F,
-                      verbose=False
-                      )
-        self.F  [:,k] =ash_obj.post_mean
-        self.F2 [:,k] =ash_obj.post_mean2
+        if self.prior_F == "norm" or self.prior_F == "exp":
+            ash_obj = ash(betahat   = fhat, 
+                          sebetahat = s_f ,
+                         prior     = self.prior_F,
+                         verbose=False
+                         )
+            self.F  [:,k] =ash_obj.post_mean
+            self.F2 [:,k] =ash_obj.post_mean2
         
         
-        self.kl_f[k]= ash_obj.log_lik-  normal_means_loglik(x=fhat , 
+            self.kl_f[k]= ash_obj.log_lik-  normal_means_loglik(x=fhat , 
                                            s= s_f,
                                            Et=ash_obj.post_mean,
                                            Et2= ash_obj.post_mean2
                                            ) 
+        if self.prior_F == "emdn":
+            emdn = emdn_posterior_means( X =self.X_f ,
+                             betahat   =fhat,
+                             sebetahat =s_f  
+                        )
+            self.F  [:,k] =emdn.post_mean
+            self.F2 [:,k] =emdn.post_mean2
         
         
         
