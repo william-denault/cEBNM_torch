@@ -25,25 +25,37 @@ class DensityRegressionDataset(Dataset):
 
 # Mixture Density Network
 class MDN(nn.Module):
-    def __init__(self, input_dim, hidden_dim, n_gaussians):
+    def __init__(self, input_dim, hidden_dim, n_gaussians, n_layers=4):
         super(MDN, self).__init__()
-        self.fc1 = nn.Linear(input_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        
+        # Input layer
+        self.fc_in = nn.Linear(input_dim, hidden_dim)
+        
+        # Hidden layers
+        self.hidden_layers = nn.ModuleList([nn.Linear(hidden_dim, hidden_dim) for _ in range(n_layers)])
+        
+        # Output layers for the Gaussian parameters
         self.pi = nn.Linear(hidden_dim, n_gaussians)  # Mixing coefficients (weights)
         self.mu = nn.Linear(hidden_dim, n_gaussians)  # Means of Gaussians
         self.log_sigma = nn.Linear(hidden_dim, n_gaussians)  # Log of standard deviations
 
     def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
+        x = torch.relu(self.fc_in(x))
+        
+        # Passing through each hidden layer
+        for layer in self.hidden_layers:
+            x = torch.relu(layer(x))
+        
+        # Outputs
         pi = torch.softmax(self.pi(x), dim=1)  # Softmax for mixture weights
         mu = self.mu(x)  # Mean of each Gaussian
         log_sigma = self.log_sigma(x)  # Log standard deviation for stability
+        
         return pi, mu, log_sigma
 
 # Negative log-likelihood loss for MDN with varying observation noise
 def mdn_loss_with_varying_noise(pi, mu, log_sigma, betahat, sebetahat):
-    sigma = torch.exp(log_sigma)  # Model predicted std (Gaussian std)
+    sigma =torch.exp(log_sigma)  # Model predicted std (Gaussian std)
     sebetahat = sebetahat.unsqueeze(1)  # Match the dimensions for broadcasting
     total_sigma = torch.sqrt(sigma**2 + sebetahat**2)  # Combine with varying observation noise
     m = torch.distributions.Normal(mu, total_sigma)
@@ -55,13 +67,14 @@ def mdn_loss_with_varying_noise(pi, mu, log_sigma, betahat, sebetahat):
 
 # Class to store the results
 class EmdnPosteriorMeanNorm:
-    def __init__(self, post_mean, post_mean2, post_sd):
+    def __init__(self, post_mean, post_mean2, post_sd, loss=0):
         self.post_mean = post_mean
         self.post_mean2 = post_mean2
         self.post_sd = post_sd
+        self.loss = loss
 
 # Main function to train the model and compute posterior means, mean^2, and standard deviations
-def emdn_posterior_means(X, betahat, sebetahat, n_epochs=50, n_gaussians=5, hidden_dim=64, batch_size=128, lr=0.001):
+def emdn_posterior_means(X, betahat, sebetahat, n_epochs=100 , n_gaussians=5, hidden_dim=64, batch_size=128, lr=0.001):
     # Standardize X
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
@@ -116,11 +129,11 @@ def emdn_posterior_means(X, betahat, sebetahat, n_epochs=50, n_gaussians=5, hidd
             sebetahat=np.array([sebetahat[i]]),
             log_pi=np.log(pi_np[i, :]),
             location=mu_np[i, :],
-            scale=np.sqrt(np.exp(log_sigma_np[i, :]) ** 2)
+            scale=np.sqrt(np.exp(log_sigma_np[i, :]) ** 2 )
         )
         post_mean[i] = result.post_mean
         post_mean2[i] = result.post_mean2
         post_sd[i] = result.post_sd
 
     # Return all three arrays: posterior mean, mean^2, and standard deviation
-    return EmdnPosteriorMeanNorm(post_mean, post_mean2, post_sd)
+    return EmdnPosteriorMeanNorm(post_mean, post_mean2, post_sd, loss= running_loss)

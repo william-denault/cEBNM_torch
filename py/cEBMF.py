@@ -142,12 +142,12 @@ class cEBMF_object :
                         )
             self.L  [:,k] =emdn.post_mean
             self.L2 [:,k] =emdn.post_mean2
-        
-            #self.kl_l[k]=ash_obj.log_lik-   normal_means_loglik(x=lhat , 
-           #                                 s=  s_l,
-           #                                 Et=emdn.post_mean,
-           #                                 Et2= emdn.post_mean2
-           #                                )
+            self.kl_l[k]  =-emdn.loss-   normal_means_loglik(x=lhat , 
+                                            s=  s_l,
+                                            Et=emdn.post_mean,
+                                            Et2= emdn.post_mean2
+                                           )
+ 
         
         
         fhat , s_f  = compute_hat_f_and_s_f(Z = self.Rk,
@@ -177,6 +177,11 @@ class cEBMF_object :
                         )
             self.F  [:,k] =emdn.post_mean
             self.F2 [:,k] =emdn.post_mean2
+            self.kl_f[k]= -emdn.loss-  normal_means_loglik(x=fhat , 
+                                           s= s_f,
+                                           Et=emdn.post_mean,
+                                           Et2= emdn.post_mean2
+                                           ) 
         
         
         
