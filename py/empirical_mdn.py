@@ -74,7 +74,7 @@ class EmdnPosteriorMeanNorm:
         self.loss = loss
 
 # Main function to train the model and compute posterior means, mean^2, and standard deviations
-def emdn_posterior_means(X, betahat, sebetahat, n_epochs=100 , n_gaussians=5, hidden_dim=64, batch_size=128, lr=0.001):
+def emdn_posterior_means(X, betahat, sebetahat, n_epochs=100 ,n_layers=4, n_gaussians=5, hidden_dim=64, batch_size=128, lr=0.001):
     # Standardize X
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
@@ -85,7 +85,7 @@ def emdn_posterior_means(X, betahat, sebetahat, n_epochs=100 , n_gaussians=5, hi
 
     # Initialize model and optimizer
     input_dim = X_scaled.shape[1]  # Number of input features
-    model = MDN(input_dim=input_dim, hidden_dim=hidden_dim, n_gaussians=n_gaussians)
+    model = MDN(input_dim=input_dim, hidden_dim=hidden_dim, n_gaussians=n_gaussians,n_layers=n_layers)
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
     # Training loop
