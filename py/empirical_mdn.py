@@ -60,7 +60,7 @@ def mdn_loss_with_varying_noise(pi, mu, log_sigma, betahat, sebetahat):
     total_sigma = torch.sqrt(sigma**2 + sebetahat**2)  # Combine with varying observation noise
     m = torch.distributions.Normal(mu, total_sigma)
     probs = m.log_prob(betahat.unsqueeze(1))  # Log probability of betahat under each Gaussian
-    log_probs = probs + torch.log(pi + 1e-8)  # Log-prob weighted by pi
+    log_probs = probs + torch.log(pi )  # Log-prob weighted by pi
     nll = -torch.logsumexp(log_probs, dim=1)  # Logsumexp for numerical stability
     return nll.mean()
 

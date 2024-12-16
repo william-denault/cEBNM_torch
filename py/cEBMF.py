@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 sys.path.append(r"c:\Document\Serieux\Travail\python_work\cEBNM_torch\py")
 from ash import *
 from empirical_mdn import *
+from sklearn.decomposition import NMF
 
 class cEBMF_object :
     def __init__( 
@@ -42,33 +43,51 @@ class cEBMF_object :
      self.n_nonmissing  = np.prod(data.shape) -np.sum (  np.isnan( data))
      self.obj           =  [np.inf]
 
-    def init_LF(self):
-        
-         
+    def init_LF(self, use_nmf=False):
+        """
+        Initialize latent factors using SVD or NMF, with support for missing values.
 
+         Parameters:
+            - use_nmf (bool): Whether to use Non-Negative Matrix Factorization (NMF) for initialization.
+        """
         if self.has_nan:
-         print("The array contains missing values (NaN), generate initialization using iterive svd.")
-         imputed_data = IterativeSVD().fit_transform(self.data)
-          
-         #imputer = SimpleImputer(missing_values=np.nan, strategy='mean')
-         #imputed_data = imputer.fit_transform(self.data)
-         
-         U, s, Vt = np.linalg.svd(imputed_data, full_matrices=False)
+            print("The array contains missing values (NaN), generating initialization using Iterative SVD.")
+            imputed_data = IterativeSVD().fit_transform(self.data)
         else:
-         print("The array does not contain any missing values.")
-         U, s, Vt = np.linalg.svd(self.data, full_matrices=False)
-        
-       
-        K = np.min([self.K, U.shape[1]])
+            print("The array does not contain any missing values.")
+            imputed_data = self.data
+    
+    # Ensure non-negativity for NMF
+        if use_nmf:
+         imputed_data[imputed_data < 0] = 1e-6  # Replace negatives with a small positive constant
+    
+    # Determine the number of components (K)
+        K = np.min([self.K, imputed_data.shape[1]])
+    
+        if use_nmf:
+         # Use Non-Negative Matrix Factorization
+            print("Initializing latent factors using NMF.")
+            nmf_model = NMF(n_components=K, init='random', random_state=42, max_iter=500)
+            L = nmf_model.fit_transform(imputed_data)
+            F = nmf_model.components_.T
+        else:
+        # Use Singular Value Decomposition
+            print("Initializing latent factors using SVD.")
+            U, s, Vt = np.linalg.svd(imputed_data, full_matrices=False)
         # Keep only the top K singular values/vectors
-        U_k = U[:, :K]
-        D_k = np.diag(s[:K])
-        V_k = Vt[:K, :]
-        self.L = np.matmul(U_k,  D_k)
-        self.F =V_k.T
+            U_k = U[:, :K]
+            D_k = np.diag(s[:K])
+            V_k = Vt[:K, :]
+            L = np.matmul(U_k, D_k)
+            F = V_k.T
+
+    # Assign the results to the class attributes
+        self.L = L
+        self.F = F
         self.L2 = self.L**2
         self.F2 = self.F**2
         self.update_tau()
+
     
     def cal_expected_residuals(self): 
         if self.K == 1:
@@ -367,7 +386,7 @@ import numpy as np
 def normal_means_loglik(x, s, Et, Et2):
     # Create a boolean index for valid entries where s is finite and greater than 0
     idx = np.isfinite(s) & (s > 0)
- 
+    
     # Filter arrays based on valid index
     x = x[idx]
     s = s[idx]
