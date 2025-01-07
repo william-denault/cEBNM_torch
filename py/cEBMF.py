@@ -3,7 +3,7 @@ import sys
 from fancyimpute import IterativeSVD
 import matplotlib.pyplot as plt
 # Add the path to utils.py
-sys.path.append(r"c:\Document\Serieux\Travail\python_work\cEBNM_torch\py")
+sys.path.append(r"D:\Document\Serieux\Travail\python_work\cEBNM_torch\py")
 from ash import *
 from empirical_mdn import *
 from sklearn.decomposition import NMF
