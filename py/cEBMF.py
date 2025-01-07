@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 sys.path.append(r"D:\Document\Serieux\Travail\python_work\cEBNM_torch\py")
 from ash import *
 from empirical_mdn import *
+from ebnm_point_laplace import *
+from ebnm_point_exp import *
 from sklearn.decomposition import NMF
 
 class cEBMF_object :
@@ -154,6 +156,32 @@ class cEBMF_object :
                                             Et=ash_obj.post_mean,
                                             Et2= ash_obj.post_mean2
                                            )
+        if self.prior_L== "point_Laplace":
+            ebnm_obj = ebnm_point_laplace_solver(x   =lhat,
+                      s =s_l 
+                      )
+            self.L  [:,k] =ebnm_obj.post_mean
+            self.L2 [:,k] =ebnm_obj.post_mean2
+        
+            self.kl_l[k]=ebnm_obj.log_lik-   normal_means_loglik(x=lhat , 
+                                            s=  s_l,
+                                            Et=ebnm_obj.post_mean,
+                                            Et2= ebnm_obj.post_mean2
+                                           )
+
+        if self.prior_L== "point_exp":
+            ebnm_obj = ebnm_point_exp_solver(x   =lhat,
+                      s =s_l  
+                      )
+            self.L  [:,k] =ebnm_obj.post_mean
+            self.L2 [:,k] =ebnm_obj.post_mean2
+        
+            self.kl_l[k]=ebnm_obj.log_lik-   normal_means_loglik(x=lhat , 
+                                            s=  s_l,
+                                            Et=ebnm_obj.post_mean,
+                                            Et2= ebnm_obj.post_mean2
+                                           )
+
         if self.prior_L == "emdn":
             emdn =emdn_posterior_means ( X =self.X_l ,
                              betahat   =lhat,
@@ -188,7 +216,34 @@ class cEBMF_object :
                                            s= s_f,
                                            Et=ash_obj.post_mean,
                                            Et2= ash_obj.post_mean2
-                                           ) 
+                                           )
+        if self.prior_F == "point_Laplace":
+            ebnm_obj = ebnm_point_laplace_solver(x   = fhat, 
+                         s = s_f  
+                         )
+            self.F  [:,k] =ebnm_obj.post_mean
+            self.F2 [:,k] =ebnm_obj.post_mean2
+        
+        
+            self.kl_f[k]= ebnm_obj.log_lik-  normal_means_loglik(x=fhat , 
+                                           s= s_f,
+                                           Et=ebnm_obj.post_mean,
+                                           Et2= ebnm_obj.post_mean2
+                                           )    
+        if self.prior_F == "point_exp":
+            ebnm_obj = ebnm_point_exp_solver(x  = fhat, 
+                          s= s_f  
+                         )
+            self.F  [:,k] =ebnm_obj.post_mean
+            self.F2 [:,k] =ebnm_obj.post_mean2
+        
+        
+            self.kl_f[k]= ebnm_obj.log_lik-  normal_means_loglik(x=fhat , 
+                                           s= s_f,
+                                           Et=ebnm_obj.post_mean,
+                                           Et2= ebnm_obj.post_mean2
+                                           )    
+
         if self.prior_F == "emdn":
             emdn = emdn_posterior_means( X =self.X_f ,
                              betahat   =fhat,

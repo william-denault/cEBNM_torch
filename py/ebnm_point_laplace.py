@@ -424,25 +424,31 @@ def optimize_pl_nllik_with_gradient(x, s, par_init, fix_par):
         fun, free_params, method="L-BFGS-B", jac=jac, bounds=bounds
     )
 
-    if not result.success:
-        raise ValueError("Optimization failed: " + result.message)
-
+    
     # Update the full parameter set with optimized values
     optimized_params = np.array(par_init)
     optimized_params[~np.array(fix_par)] = result.x
     optimized_params[0]= 1- 1/(1+ np.exp(optimized_params[0]))
+    nllik=result.fun
     
+    if not result.success:
+         
+        #raise ValueError("Optimization failed: " + result.message)
+        optimized_params[0]= 0
+        optimized_params[1]=0
+        nllik = 0
+
     # Compute final negative log likelihood
     
 
     return  optimizePointLalplace(w=optimized_params[0],
                                   a=np.exp( optimized_params[1]),
                                   mu=optimized_params[2],
-                                  nllik= result.fun)
+                                  nllik= nllik)
 
 
 
-class ebnnm_point_laplace:
+class ebnm_point_laplace:
     def __init__(self, post_mean, post_mean2, post_sd, scale, pi,   log_lik=0,#log_lik2 =0,
                  mode=0):
         self.post_mean = post_mean
@@ -455,7 +461,7 @@ class ebnnm_point_laplace:
         self.mode =  mode
 
 
-def ebnnm_point_laplace_solver ( x,s,opt_mu=False,par_init = [0.5, 1.0, 0.0]  ):
+def ebnm_point_laplace_solver ( x,s,opt_mu=False,par_init = [0.5, 1.0, 0.0]  ):
     if(opt_mu):
         fix_par = [False, False, False]
     else :
@@ -463,7 +469,7 @@ def ebnnm_point_laplace_solver ( x,s,opt_mu=False,par_init = [0.5, 1.0, 0.0]  ):
     par_init = par_init
     optimized_prior =  optimize_pl_nllik_with_gradient(x, s, par_init, fix_par)
     post_obj=  posterior_mean_laplace(x, s, optimized_prior.w, optimized_prior.a, optimized_prior.mu)
-    return( ebnnm_point_laplace( post_mean=post_obj.post_mean, 
+    return( ebnm_point_laplace( post_mean=post_obj.post_mean, 
                                 post_mean2=post_obj.post_mean2, 
                                 post_sd=post_obj.post_sd,
                                 scale=optimized_prior.a,
