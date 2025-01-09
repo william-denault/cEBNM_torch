@@ -67,14 +67,15 @@ def mdn_loss_with_varying_noise(pi, mu, log_sigma, betahat, sebetahat):
 
 # Class to store the results
 class EmdnPosteriorMeanNorm:
-    def __init__(self, post_mean, post_mean2, post_sd, loss=0):
+    def __init__(self, post_mean, post_mean2, post_sd, loss=0,model_param=None):
         self.post_mean = post_mean
         self.post_mean2 = post_mean2
         self.post_sd = post_sd
         self.loss = loss
+        self.model_param= model_param
 
 # Main function to train the model and compute posterior means, mean^2, and standard deviations
-def emdn_posterior_means(X, betahat, sebetahat, n_epochs=100 ,n_layers=4, n_gaussians=5, hidden_dim=64, batch_size=128, lr=0.001):
+def emdn_posterior_means(X, betahat, sebetahat, n_epochs=100 ,n_layers=4, n_gaussians=5, hidden_dim=64, batch_size=128, lr=0.001, model_param=None):
     # Standardize X
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
@@ -87,6 +88,8 @@ def emdn_posterior_means(X, betahat, sebetahat, n_epochs=100 ,n_layers=4, n_gaus
     input_dim = X_scaled.shape[1]  # Number of input features
     model = MDN(input_dim=input_dim, hidden_dim=hidden_dim, n_gaussians=n_gaussians,n_layers=n_layers)
     optimizer = optim.Adam(model.parameters(), lr=lr)
+    if model_param is not None:
+        model.load_state_dict(model_param)
 
     # Training loop
     for epoch in range(n_epochs):
@@ -135,5 +138,6 @@ def emdn_posterior_means(X, betahat, sebetahat, n_epochs=100 ,n_layers=4, n_gaus
         post_mean2[i] = result.post_mean2
         post_sd[i] = result.post_sd
 
+    model_param= model.state_dict()
     # Return all three arrays: posterior mean, mean^2, and standard deviation
-    return EmdnPosteriorMeanNorm(post_mean, post_mean2, post_sd, loss= running_loss)
+    return EmdnPosteriorMeanNorm(post_mean, post_mean2, post_sd, loss= running_loss,model_param=model_param)

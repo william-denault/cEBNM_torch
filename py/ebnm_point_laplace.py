@@ -143,8 +143,8 @@ def posterior_mean_laplace(x, s, w, a, mu=0):
     laplace_mean_positive = my_etruncnorm(0, 99999 ,x - mu - s**2 * a, s)
     laplace_mean_negative = my_etruncnorm(-99999, 0, x - mu + s**2 * a, s)
     laplace_component_mean = lm * laplace_mean_positive + (1 - lm) * laplace_mean_negative
-    post_mean2              =  wpost * (lm * my_e2truncnorm(0, np.inf, x - mu - s**2 * a, s)
-                                       + (1 - lm) * my_e2truncnorm(-np.inf, 0, x - mu + s**2 * a, s))
+    post_mean2              =  wpost * (lm * my_e2truncnorm(0, 99999, x - mu - s**2 * a, s)
+                                       + (1 - lm) * my_e2truncnorm(-99999, 0, x - mu + s**2 * a, s))
 
     
     # Combine posterior means

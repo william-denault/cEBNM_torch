@@ -68,7 +68,7 @@ def posterior_mean_pe(x, s, w, a, mu=0):
     # Compute the truncated means for the Laplace component
     laplace_mean_positive = my_etruncnorm(0, 99999 ,x - mu - s**2 * a, s) 
     laplace_component_mean =   laplace_mean_positive  
-    post_mean2              =  wpost * (  my_e2truncnorm(0, np.inf, x - mu - s**2 * a, s)
+    post_mean2              =  wpost * (  my_e2truncnorm(0, 99999, x - mu - s**2 * a, s)
                                        )
 
     

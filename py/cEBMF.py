@@ -44,6 +44,9 @@ class cEBMF_object :
      self.has_nan       =np.isnan(self.data).any() 
      self.n_nonmissing  = np.prod(data.shape) -np.sum (  np.isnan( data))
      self.obj           =  [np.inf]
+     self.model_list_L         = [None] * K
+     self.model_list_F         = [None] * K
+
 
     def init_LF(self, use_nmf=False):
         """
@@ -185,8 +188,11 @@ class cEBMF_object :
         if self.prior_L == "emdn":
             emdn =emdn_posterior_means ( X =self.X_l ,
                              betahat   =lhat,
-                             sebetahat =s_l  
+                             sebetahat =s_l ,
+                             model_param= self.model_list_L[k]
                         )
+            
+            self.model_list_L[k] = emdn.model_param
             self.L  [:,k] =emdn.post_mean
             self.L2 [:,k] =emdn.post_mean2
             self.kl_l[k]  =-emdn.loss-   normal_means_loglik(x=lhat , 
@@ -247,8 +253,11 @@ class cEBMF_object :
         if self.prior_F == "emdn":
             emdn = emdn_posterior_means( X =self.X_f ,
                              betahat   =fhat,
-                             sebetahat =s_f  
+                             sebetahat =s_f ,
+                             model_param= self.model_list_F[k]
                         )
+            
+            self.model_list_F[k] = emdn.model_param
             self.F  [:,k] =emdn.post_mean
             self.F2 [:,k] =emdn.post_mean2
             self.kl_f[k]= -emdn.loss-  normal_means_loglik(x=fhat , 
