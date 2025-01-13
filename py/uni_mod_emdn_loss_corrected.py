@@ -1,6 +1,10 @@
 # Define dataset class that includes observation noise
  
+import os
+import sys
 
+import matplotlib.pyplot as plt
+sys.path.append(r"D:\Document\Serieux\Travail\python_work\cEBNM_torch\py")
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -128,6 +132,34 @@ class Unimod_Emdn_PosteriorMeanNorm:
         self.model_param= model_param
 
 
+
+def weighted_rmse_loss(output, target, weights):
+    """
+    Compute the weighted Root Mean Squared Error (RMSE) loss.
+
+    Parameters:
+        output (torch.Tensor): The predictions (model outputs).
+        target (torch.Tensor): The ground truth values.
+        weights (torch.Tensor): Weights for each sample in the batch.
+
+    Returns:
+        torch.Tensor: The computed weighted RMSE loss.
+    """
+    # Ensure the weights are normalized
+  
+    # Compute the squared differences
+    squared_diff = (output - target) ** 2
+ 
+
+    # Compute the mean of the weighted squared differences
+    weighted_mse =  squared_diff * weights 
+    weighted_mse = weighted_mse.mean()
+    # Take the square root to get the RMSE
+    weighted_rmse = torch.sqrt(weighted_mse)
+
+    return weighted_rmse
+
+
 # Main function to train the model and compute posterior means, mean^2, and standard deviations
 def unimod_emdn_posterior_means(X, betahat, sebetahat, n_epochs=100 ,n_layers=4,  num_classes=20, hidden_dim=64, batch_size=128, lr=0.001, model_param=None,penalty=1.5):
     # Standardize X
@@ -172,12 +204,33 @@ def unimod_emdn_posterior_means(X, betahat, sebetahat, n_epochs=100 ,n_layers=4,
             cash_loss.backward()
             optimizer_cash.step()
             total_cash_loss += cash_loss.item()
+            outputs = model_cash(inputs)
+
+            all_pi_values_np = outputs.detach().numpy()
+            all_location  =  mean_predictions.detach().numpy()
+    # Initialize arrays to store the results
+            post_mean = 0* ( targets.detach().numpy ())
+            post_mean2 =   0* (  targets.detach().numpy())
+         
+
+    # Estimate posterior means for each observation
+            for i in range(len(post_mean)):
+                result = posterior_mean_norm(
+                betahat=np.array([targets.detach().numpy()[i]]),
+                sebetahat=np.array([noise_std.detach().numpy()[i]]),
+                log_pi=np.log(all_pi_values_np[i, :]),
+                location =  all_location[i],
+                scale= scale  # Assuming this is available from earlier in your code
+                 ) 
+                post_mean[i] = result.post_mean
+                post_mean2[i] = result.post_mean2 
 
 
-
+            post_mean=  torch.tensor(post_mean, dtype=torch.float32)
+            weigth =torch.tensor(1/ (post_mean2 +0.0000001), dtype=torch.float32)
             optimizer_mean.zero_grad()
             #mean_predictions =  model_mean(inputs).squeeze(-1)
-            mean_loss = mean_criterion(mean_predictions, targets)
+            mean_loss = weighted_rmse_loss(mean_predictions, targets,weigth)
             mean_loss.backward()
             optimizer_mean.step()
             total_mean_loss += mean_loss.item()

@@ -140,3 +140,59 @@ def apply_log_sum_exp(data_loglik, assignment_loglik):
     res = np.apply_along_axis(subtract_log_sum_exp, 1, combined_loglik)
     
     return res
+
+
+
+
+
+ 
+
+def posterior_point_mass_normal(betahat, sebetahat , pi, mu0, mu1, sigma_0 ):
+    """
+    Compute the posterior mean and variance for a normal likelihood with point-mass-normal prior.
+
+    Parameters:
+    - betahat: observed data point
+    - sebetahat : observation noise sd
+    - pi: mixing proportion for the point mass
+    - mu0: point mass location
+    - mu1: mean of the normal prior
+    - sigma_0 : sd of the normal prior
+
+    Returns:
+    - post_mean: posterior mean
+    - post_var: posterior variance
+    """
+
+    # Marginal likelihood for the normal prior
+    marginal_likelihood = norm.pdf(betahat, loc=mu1, scale=np.sqrt(sigma_0**2 + sebetahat**2))
+    
+    # Likelihood under the point mass
+    likelihood_point_mass = norm.pdf(betahat, loc=mu0, scale=np.sqrt(sebetahat**2))
+    
+    # Posterior weights
+    w0 = pi * likelihood_point_mass / (pi * likelihood_point_mass + (1 - pi) * marginal_likelihood)
+    w1 = 1 - w0
+
+    # Posterior for the normal component
+    mu_post = (mu1 / sigma_0**2 + betahat / sebetahat**2) / (1 / sigma_0**2 + 1 / sebetahat**2)
+    sigma_post2 = 1 / (1 / sigma_0**2 + 1 / sebetahat**2)
+
+    # Posterior mean
+    post_mean = w0 * mu0 + w1 * mu_post
+
+    # Posterior variance
+    post_var = w0 * (mu0 - post_mean) ** 2 + w1 * (sigma_post2 + (mu_post - post_mean) ** 2)
+
+    t_ind_Var = np.concatenate(
+        ([0], 
+         np.array([1 / ((1 /sebetahat **2) + (1 /  sigma_0**2))]))
+    )
+
+    # Use the scalar value from t_ind_Var[1] for subsequent operations
+    t_var_scalar = t_ind_Var[1]
+    
+    post_mean  = w1 * ( t_var_scalar / (sebetahat**2)) * betahat +  mu1 * (1 - t_var_scalar  / (sebetahat**2))
+
+
+    return post_mean, post_var

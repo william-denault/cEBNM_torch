@@ -75,8 +75,10 @@ class EmdnPosteriorMeanNorm:
         self.model_param= model_param
 
 # Main function to train the model and compute posterior means, mean^2, and standard deviations
-def emdn_posterior_means(X, betahat, sebetahat, n_epochs=100 ,n_layers=4, n_gaussians=5, hidden_dim=64, batch_size=128, lr=0.001, model_param=None):
+def emdn_posterior_means(X, betahat, sebetahat, n_epochs=20 ,n_layers=4, n_gaussians=5, hidden_dim=64, batch_size=128, lr=0.001, model_param=None):
     # Standardize X
+    if X.ndim == 1:
+        X = X.reshape(-1, 1)
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
 
