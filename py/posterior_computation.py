@@ -183,16 +183,6 @@ def posterior_point_mass_normal(betahat, sebetahat , pi, mu0, mu1, sigma_0 ):
 
     # Posterior variance
     post_var = w0 * (mu0 - post_mean) ** 2 + w1 * (sigma_post2 + (mu_post - post_mean) ** 2)
-
-    t_ind_Var = np.concatenate(
-        ([0], 
-         np.array([1 / ((1 /sebetahat **2) + (1 /  sigma_0**2))]))
-    )
-
-    # Use the scalar value from t_ind_Var[1] for subsequent operations
-    t_var_scalar = t_ind_Var[1]
-    
-    post_mean  = w1 * ( t_var_scalar / (sebetahat**2)) * betahat +  mu1 * (1 - t_var_scalar  / (sebetahat**2))
-
+ 
 
     return post_mean, post_var
