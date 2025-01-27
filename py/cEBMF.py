@@ -3,12 +3,13 @@ import sys
 from fancyimpute import IterativeSVD
 import matplotlib.pyplot as plt
 # Add the path to utils.py
-sys.path.append(r"D:\Document\Serieux\Travail\python_work\cEBNM_torch\py")
+sys.path.append(r"D:\Document\Serieux\Travail\python_work\cEBNM_torch\py") 
 from ash import *
 from empirical_mdn import *
 from ebnm_point_laplace import *
 from ebnm_point_exp import *
 from sklearn.decomposition import NMF
+from covaraite_moderated_generalized_binary import *
 
 class cEBMF_object :
     def __init__( 
@@ -26,14 +27,14 @@ class cEBMF_object :
                  param_cebmf_f =None,
                  fit_constant= True,
                  init_type ="udv_si" ):
-     self.data          = data 
+     self.data          = data.astype(np.float32) 
      self.K             = K 
      self.X_l           = X_l
      self.X_f           = X_f
      self.max_K         = max_K
      self.prior_L       = prior_L
      self.prior_F       = prior_F
-     self.type_noise    = type_noise,
+     self.type_noise    = type_noise
      self.maxit         = maxit
      self.param_cebmf_l = param_cebmf_l
      self.param_cebmf_f = param_cebmf_f
@@ -49,90 +50,79 @@ class cEBMF_object :
 
 
     def init_LF(self, use_nmf=False):
-        """
-        Initialize latent factors using SVD or NMF, with support for missing values.
-
-         Parameters:
-            - use_nmf (bool): Whether to use Non-Negative Matrix Factorization (NMF) for initialization.
-        """
         if self.has_nan:
             print("The array contains missing values (NaN), generating initialization using Iterative SVD.")
             imputed_data = IterativeSVD().fit_transform(self.data)
         else:
             print("The array does not contain any missing values.")
             imputed_data = self.data
-    
-    # Ensure non-negativity for NMF
+
         if use_nmf:
-         imputed_data[imputed_data < 0] = 1e-6  # Replace negatives with a small positive constant
-    
-    # Determine the number of components (K)
-        K = np.min([self.K, imputed_data.shape[1]])
-    
-        if use_nmf:
-         # Use Non-Negative Matrix Factorization
-            print("Initializing latent factors using NMF.")
+            imputed_data[imputed_data < 0] = 1e-6
+            K = min(self.K, imputed_data.shape[1])
             nmf_model = NMF(n_components=K, init='random', random_state=42, max_iter=500)
-            L = nmf_model.fit_transform(imputed_data)
-            F = nmf_model.components_.T
+            self.L = nmf_model.fit_transform(imputed_data).astype(np.float32)
+            self.F = nmf_model.components_.T.astype(np.float32)
         else:
-        # Use Singular Value Decomposition
-            print("Initializing latent factors using SVD.")
             U, s, Vt = np.linalg.svd(imputed_data, full_matrices=False)
-        # Keep only the top K singular values/vectors
+            K = min(self.K, len(s))
             U_k = U[:, :K]
             D_k = np.diag(s[:K])
             V_k = Vt[:K, :]
-            L = np.matmul(U_k, D_k)
-            F = V_k.T
+            self.L = (U_k @ D_k).astype(np.float32)
+            self.F = V_k.T.astype(np.float32)
 
-    # Assign the results to the class attributes
-        self.L = L
-        self.F = F
         self.L2 = self.L**2
         self.F2 = self.F**2
         self.update_tau()
 
     
-    def cal_expected_residuals(self): 
-        if self.K == 1:
-            # When K=1, directly calculate outer product for first and second moments
-            prod_square_firstmom = np.outer(self.L[:, 0] ** 2, self.F[:, 0] ** 2)
-            prod_sectmom = np.outer(self.L2[:, 0], self.F2[:, 0])
-        else:
-            # When K>1, sum the outer products across all K components
-            prod_square_firstmom = np.sum(
-                [np.outer(self.L[:, k] ** 2, self.F[:, k].T ** 2) for k in range(self.K)], axis=0
-            )
-            prod_sectmom = np.sum(
-                [np.outer(self.L2[:, k], self.F2[:, k]) for k in range(self.K)], axis=0
-            )
+    def cal_expected_residuals(self):
+    # Initialize accumulators for the results
+        prod_square_firstmom = np.zeros(self.data.shape, dtype=np.float32)
+        prod_sectmom = np.zeros(self.data.shape, dtype=np.float32)
 
-        self.update_fitted_val()  # Update fitted values Y_fit
+    # Loop through each component to accumulate results
+        for k in range(self.K):
+            L_k_squared = self.L[:, k] ** 2  # Precompute L[:, k] squared
+            F_k_squared = self.F[:, k] ** 2  # Precompute F[:, k] squared
+        
+        # Use broadcasting instead of np.outer to reduce temporary memory usage
+            prod_square_firstmom += L_k_squared[:, None] * F_k_squared[None, :]
+            prod_sectmom += L_k_squared[:, None] * F_k_squared[None, :]
 
-        # Compute R2 as per the formula
-        R2 = (self.data- self.Y_fit) ** 2 - prod_square_firstmom + prod_sectmom
+    # Update fitted values
+        self.update_fitted_val()
+
+    # Compute residuals
+        R2 = (self.data - self.Y_fit) ** 2 - prod_square_firstmom + prod_sectmom
         return R2
 
-    def update_fitted_val(self):
-        """Update Y_fit based on current factors."""
-        self.Y_fit= np.sum( [np.outer(   self.L[:, k]  ,  self.F[:, k]    ) for k in range( self.K)], axis=0)
 
-    def cal_partial_residuals(self,k):
+    def update_fitted_val(self):
+        self.Y_fit = np.zeros(self.data.shape, dtype=np.float32)
+        for k in range(self.K):
+            self.Y_fit += np.outer(self.L[:, k], self.F[:, k])
+
+    def cal_partial_residuals(self, k):
         """Update Y_fit based on current factors."""
-        idx_loop = set(range(self.K))-{k}
-        self.Rk= self.data - np.sum( [np.outer(   self.L[:, j]  ,  self.F[:, j]    ) for j in  idx_loop], axis=0)
+    # Precompute the entire reconstruction
+        full_reconstruction = self.L @ self.F.T  # Matrix multiplication
+
+    # Subtract the contribution of the k-th factor
+        k_contribution = np.outer(self.L[:, k], self.F[:, k])
+        self.Rk = self.data - (full_reconstruction - k_contribution)
+
 
     def update_tau(self):
-        """Update tau based on the noise structure."""
         R2 = self.cal_expected_residuals()
-        if self.type_noise[0] == 'constant': 
-            self.tau = np.full(self.data.shape, 1 / np.nanmean(R2))
-        elif self.type_noise[0] == 'row_wise':
-            row_means = np.nanmean(R2, axis=1)  # Mean across rows
+        if self.type_noise == 'constant':
+            self.tau = np.full(self.data.shape, 1 / np.nanmean(R2), dtype=np.float32)
+        elif self.type_noise == 'row_wise':
+            row_means = np.nanmean(R2, axis=1).astype(np.float32)
             self.tau = np.tile(1 / row_means, (self.data.shape[1], 1)).T
-        elif self.type_noise[0] == 'column_wise':
-            col_means = np.nanmean(R2, axis=0)  # Mean across columns
+        elif self.type_noise == 'column_wise':
+            col_means = np.nanmean(R2, axis=0).astype(np.float32)
             self.tau = np.tile(1 / col_means, (self.data.shape[0], 1))
             
             
@@ -200,6 +190,25 @@ class cEBMF_object :
                                             Et=emdn.post_mean,
                                             Et2= emdn.post_mean2
                                            )
+        
+        if self.prior_L == "cgb":
+            cgb =cgb_posterior_means ( X =self.X_l ,
+                             betahat   =lhat,
+                             sebetahat =s_l ,
+                             model_param= self.model_list_L[k]
+                        )
+            
+            self.model_list_L[k] = cgb.model_param
+            self.L  [:,k] =cgb.post_mean
+            self.L2 [:,k] =cgb.post_mean2
+            self.kl_l[k]  =-cgb.loss-   normal_means_loglik(x=lhat , 
+                                            s=  s_l,
+                                            Et=cgb.post_mean,
+                                            Et2= cgb.post_mean2
+                                           )
+ 
+
+
  
         
         
@@ -266,7 +275,21 @@ class cEBMF_object :
                                            Et2= emdn.post_mean2
                                            ) 
         
-        
+        if self.prior_F == "cgb":
+            cgb = cgb_posterior_means( X =self.X_f ,
+                             betahat   =fhat,
+                             sebetahat =s_f ,
+                             model_param= self.model_list_F[k]
+                        )
+            
+            self.model_list_F[k] = cgb.model_param
+            self.F  [:,k] =cgb.post_mean
+            self.F2 [:,k] =cgb.post_mean2
+            self.kl_f[k]= -cgb.loss-  normal_means_loglik(x=fhat , 
+                                           s= s_f,
+                                           Et=cgb.post_mean,
+                                           Et2= cgb.post_mean2
+                                           ) 
         
     def iter (self):
         for k in range(self.K):
@@ -277,19 +300,26 @@ class cEBMF_object :
         
         
     def cal_obj(self):
-        KL =  sum( self.kl_f)+ sum(self.kl_l)
-        if self.type_noise[0] == 'constant': 
-            tau = self.tau[0,0]
-            n_tau =1
-        elif self.type_noise[0] == 'row_wise':
-            tau =self.tau[:,0]
-            n_tau =self.data.shape[1]
-        elif self.type_noise[0] == 'column_wise':
-            tau =self.tau[0,:]
-            n_tau =self.data.shape[2]
-        
-        obj= KL -0.5*np.sum (self.n_nonmissing*( np.log( 2*np.pi ) - np.log(tau + 1e-8)+ n_tau ))
+        KL = sum(self.kl_f) + sum(self.kl_l)
+
+    # Determine tau based on the type_noise setting
+        if self.type_noise == 'constant': 
+            tau = self.tau[0, 0]
+            n_tau = 1
+        elif self.type_noise == 'row_wise':
+            tau = self.tau[:, 0]
+            n_tau = self.data.shape[1]
+        elif self.type_noise == 'column_wise':
+            tau = self.tau[0, :]
+            n_tau = self.data.shape[0]
+        else:
+            raise ValueError(f"Invalid type_noise value: {self.type_noise}")
+
+    # Compute the objective function
+        obj = KL - 0.5 * np.sum(self.n_nonmissing * (np.log(2 * np.pi) - np.log(tau + 1e-8) + n_tau))
         self.obj.append(obj)
+
+
     
      
 def cEBMF(

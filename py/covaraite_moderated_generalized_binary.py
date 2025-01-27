@@ -72,9 +72,7 @@ def m_step_sigma2(gamma_2, mu_2, targets, sd_noise):
     residuals_sq = (targets - mu_2) ** 2
     sigma_0_sq = sd_noise**2
     numerator = torch.sum(gamma_2 * (residuals_sq - sigma_0_sq))
-    denominator = torch.sum(gamma_2)
-    print(numerator)
-    print(denominator)
+    denominator = torch.sum(gamma_2) 
     return torch.clamp(numerator / denominator, min=1e-6)
 
 # Class to store the results
@@ -90,7 +88,7 @@ class CgbPosteriorMeans:
         self.pi = pi
 
 # Train the two-component MDN
-def cgb_posterior_means(X, betahat, sebetahat, n_epochs=20, n_layers=4, hidden_dim=64, batch_size=128, lr=0.001, model_param=None):
+def cgb_posterior_means(X, betahat, sebetahat, n_epochs=50, n_layers=4, hidden_dim=64, batch_size=128, lr=0.001, model_param=None):
     if X.ndim == 1:
         X = X.reshape(-1, 1)
     scaler = StandardScaler()
@@ -132,8 +130,8 @@ def cgb_posterior_means(X, betahat, sebetahat, n_epochs=20, n_layers=4, hidden_d
             optimizer.step()
 
             running_loss += loss.item()
-        #print(f"Epoch {epoch + 1}/{n_epochs}, Loss: {running_loss / len(dataloader):.4f}")
-
+       #print(f"Epoch {epoch + 1}/{n_epochs}, Loss: {running_loss / len(dataloader):.4f}")
+ 
     model.eval()
     with torch.no_grad():
         full_dataloader = DataLoader(dataset, batch_size=len(dataset), shuffle=False)
