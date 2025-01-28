@@ -43,30 +43,19 @@ class MDN(nn.Module):
         return pi_1, pi_2, self.mu_2
 
 # Loss function for the MDN
-def mdn_loss(pi_1, pi_2, mu_2, sigma_2_sq, targets, sd_noise):
+def mdn_loss(pi_1, pi_2, mu_2, omega, targets, sd_noise):
     mu_1 = torch.tensor(0.0)
     sigma_1_sq_total = sd_noise**2
+    sigma_2_sq=omega*torch.abs(mu_2)
     sigma_2_sq_total = sigma_2_sq + sd_noise**2
     p1 = (1 / torch.sqrt(2 * torch.pi * sigma_1_sq_total)) * torch.exp(-0.5 * ((targets - mu_1) ** 2) / sigma_1_sq_total)
     p2 = (1 / torch.sqrt(2 * torch.pi * sigma_2_sq_total)) * torch.exp(-0.5 * ((targets - mu_2) ** 2) / sigma_2_sq_total)
     mixture_pdf = pi_1 * p1 + pi_2 * p2
     return -torch.mean(torch.log(mixture_pdf + 1e-8))
 
-# Compute responsibilities
-def compute_responsibilities(pi_1, pi_2, mu_2, sigma_2_sq, targets, sd_noise):
-    sigma_1_sq_total = sd_noise**2
-    sigma_2_sq_total = sigma_2_sq + sd_noise**2
-    p1 = (1 / torch.sqrt(2 * torch.pi * sigma_1_sq_total)) * torch.exp(-0.5 * (targets**2) / sigma_1_sq_total)
-    p2 = (1 / torch.sqrt(2 * torch.pi * sigma_2_sq_total)) * torch.exp(-0.5 * ((targets - mu_2) ** 2) / sigma_2_sq_total)
-    return (pi_2 * p2) / (pi_1 * p1 + pi_2 * p2)
+ 
 
-# Perform the M-step to update sigma_2^2
-def m_step_sigma2(gamma_2, mu_2, targets, sd_noise):
-    residuals_sq = (targets - mu_2) ** 2
-    sigma_0_sq = sd_noise**2
-    numerator = torch.sum(gamma_2 * (residuals_sq - sigma_0_sq))
-    denominator = torch.sum(gamma_2)
-    return torch.clamp(numerator / denominator, min=1e-6)
+ 
 
 # Class to store the results
 class CgbPosteriorMeans:
@@ -81,7 +70,7 @@ class CgbPosteriorMeans:
         self.pi = pi
 
 # Train the MDN model and compute posterior means
-def cgb_posterior_means(X, betahat, sebetahat, n_epochs=50,  hidden_dim=32, n_layers=2,  batch_size=1024, lr=0.01, model_param=None):
+def cgb_hard_posterior_means(X, betahat, sebetahat, n_epochs=100,  hidden_dim=64, n_layers=4,  batch_size=1024, lr=0.01, model_param=None,omega=0.02):
     if X.ndim == 1:
         X = X.reshape(-1, 1)
     scaler = StandardScaler()
@@ -94,22 +83,18 @@ def cgb_posterior_means(X, betahat, sebetahat, n_epochs=50,  hidden_dim=32, n_la
                   n_layers= n_layers)
     if model_param is not None:
         model.load_state_dict(model_param)
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-    sigma_2_sqe = torch.tensor(1, requires_grad=False)
-
+    optimizer = optim.Adam(model.parameters(), lr=lr) 
     for epoch in range(n_epochs):
         model.train()
         optimizer.zero_grad()
         for X_batch, y_batch, noise_batch in train_loader:
             pi_1, pi_2, mu_2e = model(X_batch)
-            gamma_2 = compute_responsibilities(pi_1, pi_2, mu_2e, sigma_2_sqe, y_batch, noise_batch)
-            with torch.no_grad():
-                sigma_2_sqe = m_step_sigma2(gamma_2, mu_2e, y_batch, noise_batch)
-            loss = mdn_loss(pi_1, pi_2, mu_2e, sigma_2_sqe, y_batch, noise_batch)
+           
+            loss = mdn_loss(pi_1, pi_2, mu_2e, omega, y_batch, noise_batch)
             loss.backward()
             optimizer.step()
         if epoch % 100 == 0:
-            print(f"Epoch {epoch}, Loss: {loss.item()}, Sigma_2^2: {sigma_2_sqe.item()}")
+            print(f"Epoch {epoch}, Loss: {loss.item()} ")
 
     model.eval()
     X_tensor = torch.tensor(X_scaled, dtype=torch.float32)
@@ -118,10 +103,17 @@ def cgb_posterior_means(X, betahat, sebetahat, n_epochs=50,  hidden_dim=32, n_la
 
     pi_np = pi_2.detach().numpy()
     mu_2e = mu_2e.detach().numpy()
-    sigma_prior =   np.sqrt(sigma_2_sqe.detach().numpy())
+    sigma_prior = omega*np.abs(mu_2e)    
     post_mean, post_var = np.zeros_like(betahat), np.zeros_like(betahat)
     for i in range(len(betahat)):
         post_mean[i], post_var[i] = posterior_point_mass_normal(betahat[i], sebetahat[i], 1 - pi_np[i], 0, mu_2e, sigma_prior)
     post_mean2 = post_var + post_mean**2
 
-    return CgbPosteriorMeans(post_mean, post_mean2, np.sqrt(post_var), pi_np, loss.item(), model.state_dict(), mu_2e, sigma_prior)
+    return CgbPosteriorMeans(post_mean = post_mean,
+                             post_mean2 = post_mean2, 
+                             post_sd= np.sqrt(post_var),
+                             pi=  pi_np,
+                             loss= loss.item(), 
+                             model_param=model.state_dict(),
+                             mu_1= mu_2e,
+                             sigma_0= sigma_prior)
