@@ -9,8 +9,10 @@ from empirical_mdn import *
 from ebnm_point_laplace import *
 from ebnm_point_exp import *
 from sklearn.decomposition import NMF
+from sklearn.decomposition import TruncatedSVD
+from scipy.sparse.linalg import svds
 from covaraite_moderated_generalized_binary import *
-
+from hard_covaraite_moderated_generalized_binary import *
 class cEBMF_object :
     def __init__( 
                  self,
@@ -64,16 +66,19 @@ class cEBMF_object :
             self.L = nmf_model.fit_transform(imputed_data).astype(np.float32)
             self.F = nmf_model.components_.T.astype(np.float32)
         else:
-            U, s, Vt = np.linalg.svd(imputed_data, full_matrices=False)
-            K = min(self.K, len(s))
+            K = min(self.K, imputed_data.shape[1])
+            U, s, Vt = svds(imputed_data, k= K)
+            sorted_indices = np.argsort(s)[::-1]
+            U = U[:, sorted_indices]
+            s = s[sorted_indices]
+            Vt = Vt[sorted_indices, :]
             U_k = U[:, :K]
             D_k = np.diag(s[:K])
             V_k = Vt[:K, :]
-            self.L = (U_k @ D_k).astype(np.float32)
-            self.F = V_k.T.astype(np.float32)
-
-        self.L2 = self.L**2
-        self.F2 = self.F**2
+            self.L = (U_k @ D_k).astype(np.float32)  # Left singular vectors scaled by singular values
+            self.F = V_k.T.astype(np.float32) 
+        self.L2 = np.abs( self.L )**2+1e-4
+        self.F2 = np.abs( self.F )**2+1e-4
         self.update_tau()
 
     
@@ -206,7 +211,21 @@ class cEBMF_object :
                                             Et=cgb.post_mean,
                                             Et2= cgb.post_mean2
                                            )
- 
+        if self.prior_L == "hard_cgb":
+            cgb =cgb_hard_posterior_means ( X =self.X_l ,
+                             betahat   =lhat,
+                             sebetahat =s_l ,
+                             model_param= self.model_list_L[k]
+                        )
+            
+            self.model_list_L[k] = cgb.model_param
+            self.L  [:,k] =cgb.post_mean
+            self.L2 [:,k] =cgb.post_mean2
+            self.kl_l[k]  =-cgb.loss-   normal_means_loglik(x=lhat , 
+                                            s=  s_l,
+                                            Et=cgb.post_mean,
+                                            Et2= cgb.post_mean2
+                                           )
 
 
  
@@ -290,7 +309,21 @@ class cEBMF_object :
                                            Et=cgb.post_mean,
                                            Et2= cgb.post_mean2
                                            ) 
-        
+        if self.prior_F == "hard_cgb":
+            cgb =cgb_hard_posterior_means( X =self.X_f ,
+                             betahat   =fhat,
+                             sebetahat =s_f ,
+                             model_param= self.model_list_F[k]
+                        )
+            
+            self.model_list_F[k] = cgb.model_param
+            self.F  [:,k] =cgb.post_mean
+            self.F2 [:,k] =cgb.post_mean2
+            self.kl_f[k]= -cgb.loss-  normal_means_loglik(x=fhat , 
+                                           s= s_f,
+                                           Et=cgb.post_mean,
+                                           Et2= cgb.post_mean2
+                                           ) 
     def iter (self):
         for k in range(self.K):
             self.update_loading_factor_k(k=k)

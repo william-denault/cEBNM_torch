@@ -146,15 +146,17 @@ def apply_log_sum_exp(data_loglik, assignment_loglik):
 
 
  
+import numpy as np
+from scipy.stats import norm
 
-def posterior_point_mass_normal(betahat, sebetahat , pi, mu0, mu1, sigma_0 ):
+def posterior_point_mass_normal(betahat, sebetahat, pi, mu0, mu1, sigma_0):
     """
     Compute the posterior mean and variance for a normal likelihood with point-mass-normal prior.
 
     Parameters:
     - betahat: observed data point
     - sebetahat : observation noise sd
-    - pi: mixing proportion for the point mass
+    - pi: mixing proportion for the point mass (between 0 and 1)
     - mu0: point mass location
     - mu1: mean of the normal prior
     - sigma_0 : sd of the normal prior
@@ -164,25 +166,32 @@ def posterior_point_mass_normal(betahat, sebetahat , pi, mu0, mu1, sigma_0 ):
     - post_var: posterior variance
     """
 
-    # Marginal likelihood for the normal prior
+    # Avoid numerical errors when sigma_0 or sebetahat are too small
+    sigma_0 = max(sigma_0, 1e-8)
+    sebetahat = np.maximum(sebetahat, 1e-8)  # Ensure it's not too small
+
+    # Compute marginal likelihood for the normal prior
     marginal_likelihood = norm.pdf(betahat, loc=mu1, scale=np.sqrt(sigma_0**2 + sebetahat**2))
     
-    # Likelihood under the point mass
-    likelihood_point_mass = norm.pdf(betahat, loc=mu0, scale=np.sqrt(sebetahat**2))
-    
-    # Posterior weights
-    w0 = pi * likelihood_point_mass / (pi * likelihood_point_mass + (1 - pi) * marginal_likelihood)
+    # Compute likelihood under the point mass
+    likelihood_point_mass = norm.pdf(betahat, loc=mu0, scale=sebetahat)
+
+    # Compute denominator safely
+    denominator = pi * likelihood_point_mass + (1 - pi) * marginal_likelihood
+    denominator = np.maximum(denominator, 1e-12)  # Prevent division by zero
+
+    # Compute posterior weights
+    w0 = np.clip(pi * likelihood_point_mass / denominator, 0, 1)
     w1 = 1 - w0
 
-    # Posterior for the normal component
+    # Compute posterior mean and variance for the normal component
     mu_post = (mu1 / sigma_0**2 + betahat / sebetahat**2) / (1 / sigma_0**2 + 1 / sebetahat**2)
     sigma_post2 = 1 / (1 / sigma_0**2 + 1 / sebetahat**2)
 
-    # Posterior mean
+    # Compute final posterior mean
     post_mean = w0 * mu0 + w1 * mu_post
 
-    # Posterior variance
+    # Compute final posterior variance
     post_var = w0 * (mu0 - post_mean) ** 2 + w1 * (sigma_post2 + (mu_post - post_mean) ** 2)
- 
 
     return post_mean, post_var
