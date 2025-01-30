@@ -35,8 +35,12 @@ def prior_norm(X, betahat, sebetahat, model_param):
     ash_obj = ash(betahat=betahat, sebetahat=sebetahat, prior="norm", verbose=False)
     return PriorResult(post_mean=ash_obj.post_mean, post_mean2=ash_obj.post_mean2, log_lik=ash_obj.log_lik)
 
+def prior_exp(X, betahat, sebetahat, model_param):
+    ash_obj = ash(betahat=betahat, sebetahat=sebetahat, prior="norm", verbose=False)
+    return PriorResult(post_mean=ash_obj.post_mean, post_mean2=ash_obj.post_mean2, log_lik=ash_obj.log_lik)
+
 def prior_point_laplace(X, betahat, sebetahat, model_param):
-    ebnm_obj = ebnm_point_laplace_solver(x=betahat, s=sebetahat)
+    ebnm_obj = ash(betahat=betahat, sebetahat=sebetahat,  prior="exp", verbose=False)
     return PriorResult(post_mean=ebnm_obj.post_mean, post_mean2=ebnm_obj.post_mean2, log_lik=ebnm_obj.log_lik)
 
 def prior_point_exp(X, betahat, sebetahat, model_param):
@@ -58,6 +62,7 @@ def prior_hard_cgb(X, betahat, sebetahat, model_param):
 # Dictionary mapping prior names to standardized functions
 prior_functions = {
     "norm": prior_norm,
+    "exp": prior_exp,
     "point_Laplace": prior_point_laplace,
     "point_exp": prior_point_exp,
     "emdn": prior_emdn,

@@ -38,7 +38,7 @@ def wpost_pe(x, s, w, a):
     lg = np.log(a) + s**2 * a**2 / 2 - a * x + norm.logcdf(x / s - s * a)
 
     # Compute posterior weights
-    wpost = w / (w + (1 - w) * np.exp(lf - lg))
+    wpost = w / (w + (1 - w) * np.exp(np.clip(lf - lg, -np.inf, 709)))
 
     return wpost
 class PosteriorMeanPointExp:
@@ -64,7 +64,7 @@ def posterior_mean_pe(x, s, w, a, mu=0):
     # Compute posterior weights
     wpost = wpost_pe(x - mu, s, w, a)
      
-    
+    print( a)
     # Compute the truncated means for the Laplace component
     laplace_mean_positive = my_etruncnorm(0, 99999 ,x - mu - s**2 * a, s) 
     laplace_component_mean =   laplace_mean_positive  
@@ -137,6 +137,7 @@ def pe_nllik(par, x, s, par_init, fix_par, calc_grad=False, calc_hess=False):
     # Exponential component
     xright = (x - mu) / s - s * a
     lpnormright = norm.logcdf(xright)
+    lpnormright = np.clip( norm.logcdf(xright ), min = -1e8)
     lg = np.log(a) + s**2 * a**2 / 2 - a * (x - mu) + lpnormright
 
     # Combine log likelihood components
@@ -158,7 +159,7 @@ def pe_nllik(par, x, s, par_init, fix_par, calc_grad=False, calc_hess=False):
             i += 1
 
         # Gradient with respect to a (beta)
-        if not fix_a or not fix_mu:
+        if not fix_a or not fix_mu: 
             dlogpnorm_right = np.exp(-0.5 * np.log(2 * np.pi) - 0.5 * xright**2 - lpnormright)
 
         if not fix_a:
@@ -274,8 +275,8 @@ def optimize_pe_nllik_with_gradient(x, s, par_init, fix_par):
 
     # Bounds: Keep alpha unbounded, beta > 0, and mu unbounded
     bounds = [
-        (None, None),  # Alpha has no bounds
-        (0, None),     # Beta must be strictly positive
+        (None, None), # mixture between 0 and 1 
+        (0, None ),    # Beta must be strictly positive, this is the scale parameter for exponential
         (None, None)   # Mu has no bounds
     ]
     bounds = [b for b, fixed in zip(bounds, fix_par) if not fixed]
@@ -332,6 +333,6 @@ def ebnm_point_exp_solver ( x,s,opt_mu=False,par_init = [0.0, 1.0, 0.0]  ):
                                 post_mean2=post_obj.post_mean2, 
                                 post_sd=post_obj.post_sd,
                                 scale=optimized_prior.a,
-                                pi=optimized_prior.w,   log_lik=-optimized_prior.nllik,#log_lik2 =0,
+                                pi=optimized_prior.w,   log_lik=-np.clip( optimized_prior.nllik, min= 1e-32,max=1e-32),#log_lik2 =0,
                                 mode=optimized_prior.mu)
     )

@@ -83,8 +83,9 @@ def my_e2truncnorm(a, b, mean=0, sd=1):
         mean  =  abs(mean)
     
     pnorm_diff = logscale_sub(stats.norm.logcdf(beta), stats.norm.logcdf(alpha))
-    alpha_frac = alpha * np.exp( np.clip(stats.norm.logpdf(alpha) - pnorm_diff, None, 700))
-    beta_frac = beta * np.exp( np.clip(stats.norm.logpdf(beta) - pnorm_diff, None, 700))
+    alpha_frac = alpha * np.exp( np.clip(stats.norm.logpdf(alpha) - pnorm_diff, None, 300))
+ 
+    beta_frac = beta * np.exp( np.clip(stats.norm.logpdf(beta) - pnorm_diff, None, 300))
     
     # Handle inf and nan values in alpha_frac and beta_frac
     alpha_frac[np.isnan(alpha_frac) | np.isinf(alpha_frac)] = 0
