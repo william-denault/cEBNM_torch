@@ -7,9 +7,9 @@ from scipy.sparse.linalg import svds
 from scipy.stats import norm
 
 # Add the path to utils.py 
-sys.path.append(r"D:\Document\Serieux\Travail\python_work\cEBNM_torch\py")
-sys.path.append(r"D:\Document\Serieux\Travail\python_work\cEBNM_torch\py\ebnm_solver")
-sys.path.append(r"D:\Document\Serieux\Travail\python_work\cEBNM_torch\py\numerical_routine")
+sys.path.append(r"C:\Document\Serieux\Travail\python_work\cEBNM_torch\py")
+sys.path.append(r"C:\Document\Serieux\Travail\python_work\cEBNM_torch\py\ebnm_solver")
+sys.path.append(r"C:\Document\Serieux\Travail\python_work\cEBNM_torch\py\numerical_routine")
 from ash import *
 from empirical_mdn import *
 from ebnm_point_laplace import *
