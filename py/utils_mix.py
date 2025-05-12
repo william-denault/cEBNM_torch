@@ -1,5 +1,7 @@
 import numpy as np
 import math 
+from sklearn.preprocessing import StandardScaler
+
 
 def autoselect_scales_mix_norm(betahat, sebetahat, max_class=None, mult=2):
     sigmaamin = np.min(sebetahat) / 10
@@ -57,3 +59,7 @@ def autoselect_scales_mix_exp(betahat, sebetahat, max_class=None , mult=1.5,tt=1
 
     
     
+def col_scale(X, with_mean=True, with_std=True):
+    scaler = StandardScaler(with_mean=with_mean, with_std=with_std)
+    X_scaled = scaler.fit_transform(X)
+    return X_scaled, scaler.scale_

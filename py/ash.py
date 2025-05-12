@@ -77,3 +77,32 @@ def ash ( betahat,sebetahat, prior = "norm", mult=np.sqrt(2),penalty=10,verbose=
                       log_lik    = log_lik,
                      # log_lik2   = log_lik2 ,
                       mode       = mode)
+
+
+
+
+
+
+def call_r_ash_fit_all_with_postmean(beta, sigma):
+    """
+    Calls R's ash function and returns:
+    - log mixture weights
+    - mixture standard deviations
+    - posterior mean of beta
+    """
+    from rpy2.rinterface_lib.sexp import NULLType
+
+    sebetahat = np.full_like(beta, sigma)
+    ash_obj = ashr.ash(betahat=beta, sebetahat=sebetahat, mixcompdist="normal")
+
+    fitted_g = ash_obj.rx2("fitted_g")
+    pi_r = np.array(fitted_g.rx2("pi"), dtype=np.float32)
+    scale_r = np.array(fitted_g.rx2("sd"), dtype=np.float32)
+
+    posterior_mean_r = ash_obj.rx2("result").rx2("PosteriorMean")
+    if isinstance(posterior_mean_r, NULLType):
+        raise RuntimeError("R ash() returned NULL for result$PosteriorMean")
+    posterior_mean = np.array(posterior_mean_r, dtype=np.float32)
+
+    log_pi = np.log(np.clip(pi_r, 1e-12, 1.0))
+    return log_pi, scale_r, posterior_mean

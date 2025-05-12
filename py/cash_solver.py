@@ -8,17 +8,14 @@ from torch.utils.data import Dataset, DataLoader
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 from utils import *
-from numerical_routine import *
-from distribution_operation import *
-from posterior_computation import *
-from ash import *
+ 
 
 
 import os
 import sys
-sys.path.append(r"D:\Document\Serieux\Travail\python_work\cEBNM_torch\py")
+sys.path.append(r"C:\Document\Serieux\Travail\python_work\cEBNM_torch\py")
 # Import utils.py directly
-from utils import *
+from utils_mix import *
 from numerical_routine import *
 from distribution_operation import *
 from posterior_computation import *
@@ -158,7 +155,7 @@ def Cash_posterior_means(X, betahat, sebetahat, n_epochs=100 ,n_layers=4,  num_c
         betahat=np.array([betahat[i]]),
         sebetahat=np.array([sebetahat[i]]),
         log_pi=np.log(all_pi_values_np[i, :]),
-        location =  0,
+        location =  np.array([0]),
         scale= scale  # Assuming this is available from earlier in your code
         )
         post_mean[i] = result.post_mean
@@ -166,4 +163,4 @@ def Cash_posterior_means(X, betahat, sebetahat, n_epochs=100 ,n_layers=4,  num_c
         post_sd[i] = result.post_sd
 
     
-    return  Cash_PosteriorMeanNorm(post_mean, post_mean2, post_sd, loss= running_loss,model_param=model_param)
+    return  cash_PosteriorMeanNorm(post_mean, post_mean2, post_sd, loss= running_loss,model_param=model_param)

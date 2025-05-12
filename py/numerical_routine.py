@@ -4,6 +4,7 @@ from scipy.stats import norm
 from scipy.stats import truncnorm
 import scipy.stats as stats
 from scipy.optimize import minimize
+from scipy.special import logsumexp
 
 def do_truncnorm_argchecks(a, b):
     # Ensure a and b are numpy arrays, even if they are scalars
@@ -124,7 +125,9 @@ def my_e2truncnorm(a, b, mean=0, sd=1):
 
 
 
-
+def apply_log_sum_exp(data_loglik, log_pi):
+    combined_loglik = data_loglik + log_pi
+    return combined_loglik - logsumexp(combined_loglik, axis=1)[:, None]
 
 def log_sum_exp(lx, idxs=None, na_rm=False):
     # Convert input to a numpy array if it's not already
