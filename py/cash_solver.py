@@ -97,7 +97,7 @@ class cash_PosteriorMeanNorm:
 
 
 # Main function to train the model and compute posterior means, mean^2, and standard deviations
-def Cash_posterior_means(X, betahat, sebetahat, n_epochs=100 ,n_layers=4,  num_classes=20, hidden_dim=64, batch_size=128, lr=0.001, model_param=None,penalty=1.5):
+def Cash_posterior_means(X, betahat, sebetahat, n_epochs=20 ,n_layers=4,  num_classes=20, hidden_dim=64, batch_size=128, lr=0.001, model_param=None,penalty=1.5):
     # Standardize X
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
