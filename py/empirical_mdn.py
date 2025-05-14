@@ -67,11 +67,13 @@ def mdn_loss_with_varying_noise(pi, mu, log_sigma, betahat, sebetahat):
 
 # Class to store the results
 class EmdnPosteriorMeanNorm:
-    def __init__(self, post_mean, post_mean2, post_sd,location , loss=0,model_param=None):
+    def __init__(self, post_mean, post_mean2, post_sd,location ,pi_np, scale, loss=0,model_param=None):
         self.post_mean = post_mean
         self.post_mean2 = post_mean2
         self.post_sd = post_sd
-        location =location 
+        self.location =location  
+        self.pi_np=pi_np
+        self.scale= scale
         self.loss = loss
         self.model_param= model_param
 
@@ -147,4 +149,6 @@ def emdn_posterior_means(X, betahat, sebetahat, n_epochs=50 ,n_layers=4, n_gauss
                                   post_mean2,
                                     post_sd, 
                                     location = mu_np,
+                                    pi_np = pi_np,
+                                    scale = np.sqrt(np.exp(log_sigma_np ) ** 2 ),
                                     loss= running_loss,model_param=model_param)

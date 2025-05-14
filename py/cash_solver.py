@@ -88,11 +88,13 @@ def pen_loglik_loss(pred_pi, marginal_log_lik, penalty=1.1, epsilon=1e-10):
 
 # Class to store the results
 class cash_PosteriorMeanNorm:
-    def __init__(self, post_mean, post_mean2, post_sd, loss=0,model_param=None):
+    def __init__(self, post_mean, post_mean2, post_sd,pi_np,scale, loss=0,model_param=None):
         self.post_mean = post_mean
         self.post_mean2 = post_mean2
         self.post_sd = post_sd
+        self.pi_np=pi_np 
         self.loss = loss
+        self.scale=scale
         self.model_param= model_param
 
 
@@ -163,4 +165,10 @@ def Cash_posterior_means(X, betahat, sebetahat, n_epochs=20 ,n_layers=4,  num_cl
         post_sd[i] = result.post_sd
 
     
-    return  cash_PosteriorMeanNorm(post_mean, post_mean2, post_sd, loss= running_loss,model_param=model_param)
+    return  cash_PosteriorMeanNorm(post_mean,
+                                   post_mean2,
+                                   post_sd,
+                                   pi_np =all_pi_values_np,
+                                   loss= running_loss,
+                                    scale= scale,
+                                      model_param=model_param)
