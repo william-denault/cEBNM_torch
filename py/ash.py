@@ -6,6 +6,7 @@ from distribution_operation import *
 from utils import *
 from numerical_routine import *
 from posterior_computation import *
+from utils_mix import *
 
 class ash_object:
     def __init__(self, post_mean, post_mean2, post_sd, scale, pi, prior, log_lik=0,#log_lik2 =0,

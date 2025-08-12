@@ -5,12 +5,19 @@ import os
 import matplotlib.pyplot as plt
 
 # Add the path to utils.py
-sys.path.append(r"D:\Document\Serieux\Travail\python_work\cEBNM_torch\py")
+sys.path.append(r"C:\Document\Serieux\Travail\python_work\cEBNM_torch\py")
 from numerical_routine import *
 from scipy.stats import norm
 import numpy as np
 from scipy.optimize import minimize
  
+from scipy.stats import norm
+import numpy as np
+import numpy as np
+from scipy.stats import norm
+
+from scipy.optimize import minimize
+
 
 def wpost_pe(x, s, w, a):
     """
@@ -38,7 +45,7 @@ def wpost_pe(x, s, w, a):
     lg = np.log(a) + s**2 * a**2 / 2 - a * x + norm.logcdf(x / s - s * a)
 
     # Compute posterior weights
-    wpost = w / (w + (1 - w) * np.exp(np.clip(lf - lg, -np.inf, 709)))
+    wpost = w / (w + (1 - w) * np.exp(lf - lg))
 
     return wpost
 class PosteriorMeanPointExp:
@@ -64,11 +71,11 @@ def posterior_mean_pe(x, s, w, a, mu=0):
     # Compute posterior weights
     wpost = wpost_pe(x - mu, s, w, a)
      
-    print( a)
+    
     # Compute the truncated means for the Laplace component
     laplace_mean_positive = my_etruncnorm(0, 99999 ,x - mu - s**2 * a, s) 
     laplace_component_mean =   laplace_mean_positive  
-    post_mean2              =  wpost * (  my_e2truncnorm(0, 99999, x - mu - s**2 * a, s)
+    post_mean2              =  wpost * (  my_e2truncnorm(0, np.inf, x - mu - s**2 * a, s)
                                        )
 
     
@@ -77,7 +84,7 @@ def posterior_mean_pe(x, s, w, a, mu=0):
 
     if np.any(np.isinf(s)):
         inf_indices = np.isinf(s)
-        a = 1/scale[1:]
+        #a = 1/scale[1:]
         # Equivalent of `post$mean[is.infinite(s)]` 
         post_mean[inf_indices] = wpost  / a 
 
@@ -93,8 +100,8 @@ def posterior_mean_pe(x, s, w, a, mu=0):
                                      post_mean2=post_mean2,
                                      post_sd=  post_sd)
 
-import numpy as np
-from scipy.stats import norm
+
+
 
 def logscale_add(logx, logy):
     """
@@ -137,7 +144,6 @@ def pe_nllik(par, x, s, par_init, fix_par, calc_grad=False, calc_hess=False):
     # Exponential component
     xright = (x - mu) / s - s * a
     lpnormright = norm.logcdf(xright)
-    lpnormright = np.clip( norm.logcdf(xright ), min = -1e8)
     lg = np.log(a) + s**2 * a**2 / 2 - a * (x - mu) + lpnormright
 
     # Combine log likelihood components
@@ -159,13 +165,14 @@ def pe_nllik(par, x, s, par_init, fix_par, calc_grad=False, calc_hess=False):
             i += 1
 
         # Gradient with respect to a (beta)
-        if not fix_a or not fix_mu: 
+        if not fix_a or not fix_mu:
             dlogpnorm_right = np.exp(-0.5 * np.log(2 * np.pi) - 0.5 * xright**2 - lpnormright)
 
         if not fix_a:
             dg_da = np.exp(lg - llik) * (1 / a + a * s**2 - (x - mu) - s * dlogpnorm_right)
             dnllik_da = -w * dg_da
             da_dbeta = a
+            dnllik_dbeta = dnllik_da * da_dbeta
             grad[i] = np.sum(dnllik_da * da_dbeta)
             i += 1
 
@@ -234,7 +241,9 @@ def pe_nllik(par, x, s, par_init, fix_par, calc_grad=False, calc_hess=False):
         return nllik, grad
     else:
         return nllik
+    
 
+    from scipy.optimize import minimize
 
 class optimizePointExponential:
     def __init__(self, w, a, mu, nllik):
@@ -275,8 +284,8 @@ def optimize_pe_nllik_with_gradient(x, s, par_init, fix_par):
 
     # Bounds: Keep alpha unbounded, beta > 0, and mu unbounded
     bounds = [
-        (None, None), # mixture between 0 and 1 
-        (0, None ),    # Beta must be strictly positive, this is the scale parameter for exponential
+        (None, None),  # Alpha has no bounds
+        (0, None),     # Beta must be strictly positive
         (None, None)   # Mu has no bounds
     ]
     bounds = [b for b, fixed in zip(bounds, fix_par) if not fixed]
@@ -285,8 +294,9 @@ def optimize_pe_nllik_with_gradient(x, s, par_init, fix_par):
     result = minimize(
         fun, free_params, method="L-BFGS-B", jac=jac, bounds=bounds
     )
-    nllik=result.fun
-    
+
+    if not result.success:
+        raise ValueError("Optimization failed: " + result.message)
 
     # Update the full parameter set with optimized values
     optimized_params = np.array(par_init)
@@ -295,19 +305,15 @@ def optimize_pe_nllik_with_gradient(x, s, par_init, fix_par):
     # Convert alpha to w
     optimized_params[0] = 1 - 1 / (1 + np.exp(optimized_params[0]))
 
-    if not result.success:
-         
-        #raise ValueError("Optimization failed: " + result.message)
-        optimized_params[0]= 0
-        optimized_params[1]=0
-        nllik = 0
     # Convert beta to a
     optimized_params[1] = np.exp(optimized_params[1])
 
     return optimizePointExponential(w=optimized_params[0],
                                      a=optimized_params[1],
                                      mu=optimized_params[2],
-                                     nllik=nllik)
+                                     nllik=result.fun)
+
+
 
 class ebnm_point_exp:
     def __init__(self, post_mean, post_mean2, post_sd, scale, pi,   log_lik=0,#log_lik2 =0,
@@ -320,7 +326,8 @@ class ebnm_point_exp:
         self.log_lik = log_lik
        # self.log_lik2= log_lik2 
         self.mode =  mode
- 
+
+
 def ebnm_point_exp_solver ( x,s,opt_mu=False,par_init = [0.0, 1.0, 0.0]  ):
     if(opt_mu):
         fix_par = [False, False, False]
@@ -333,6 +340,6 @@ def ebnm_point_exp_solver ( x,s,opt_mu=False,par_init = [0.0, 1.0, 0.0]  ):
                                 post_mean2=post_obj.post_mean2, 
                                 post_sd=post_obj.post_sd,
                                 scale=optimized_prior.a,
-                                pi=optimized_prior.w,   log_lik=-np.clip( optimized_prior.nllik, min= 1e-32,max=1e-32),#log_lik2 =0,
+                                pi=optimized_prior.w,   log_lik=-optimized_prior.nllik,#log_lik2 =0,
                                 mode=optimized_prior.mu)
     )
