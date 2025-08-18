@@ -51,11 +51,11 @@ def ash ( betahat,sebetahat, prior = "norm", mult=np.sqrt(2),penalty=10,verbose=
         optimal_pi = optimize_pi_logL(  logL =L,
                                  penalty=penalty,
                                  verbose=verbose)  
-        log_pi=  np.tile(np.log(optimal_pi+1e-32), (betahat.shape[0],1))
-        
+        log_pi=  np.log(optimal_pi+1e-32) 
         out= posterior_mean_exp(betahat, sebetahat,
                                  log_pi=log_pi, 
                                  scale=scale)
+ 
      
     L = np.maximum(L, threshold_loglikelihood)
     

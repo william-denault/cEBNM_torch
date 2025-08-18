@@ -36,7 +36,7 @@ def prior_norm(X, betahat, sebetahat, model_param):
     return PriorResult(post_mean=ash_obj.post_mean, post_mean2=ash_obj.post_mean2, log_lik=ash_obj.log_lik)
 
 def prior_exp(X, betahat, sebetahat, model_param):
-    ash_obj = ash(betahat=betahat, sebetahat=sebetahat, prior="norm", verbose=False)
+    ash_obj = ash(betahat=betahat, sebetahat=sebetahat, prior="exp", verbose=False)
     return PriorResult(post_mean=ash_obj.post_mean, post_mean2=ash_obj.post_mean2, log_lik=ash_obj.log_lik)
 
 def prior_point_laplace(X, betahat, sebetahat, model_param):

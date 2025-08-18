@@ -152,7 +152,7 @@ def posterior_mean_laplace(x, s, w, a, mu=0):
 
     if np.any(np.isinf(s)):
         inf_indices = np.isinf(s)
-        a = 1/scale[1:]
+        a = a#1/scale[1:]
         # Equivalent of `post$mean[is.infinite(s)]` 
         post_mean[inf_indices] = wpost  / a 
 

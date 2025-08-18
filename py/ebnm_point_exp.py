@@ -1,345 +1,362 @@
-import numpy as np
-from scipy.stats import norm
-import sys
-import os
-import matplotlib.pyplot as plt
+# ebnm_point_exponential.py
+# Point–Exponential Empirical Bayes for Normal means:
+# Prior: (1 - w) * δ_{mu}  +  w * Exp(rate=a) on theta >= 0
+# Likelihood: X | theta ~ N(theta, s^2)
+# Parameters optimized on unconstrained scales: alpha (w = sigmoid(alpha)),
+#                                              beta  (a = exp(beta)),
+#                                              mu    (free).
 
-# Add the path to utils.py
-sys.path.append(r"C:\Document\Serieux\Travail\python_work\cEBNM_torch\py")
-from numerical_routine import *
-from scipy.stats import norm
+from __future__ import annotations
 import numpy as np
-from scipy.optimize import minimize
- 
+from dataclasses import dataclass
+from typing import Tuple, Optional
 from scipy.stats import norm
-import numpy as np
-import numpy as np
-from scipy.stats import norm
-
 from scipy.optimize import minimize
 
+# =========================
+# Numeric helpers
+# =========================
 
-def wpost_pe(x, s, w, a):
+_LOG2PI = np.log(2.0 * np.pi)
+
+def _log_phi(z: np.ndarray) -> np.ndarray:
+    return -0.5 * z**2 - 0.5 * _LOG2PI
+
+def _phi(z: np.ndarray) -> np.ndarray:
+    return np.exp(_log_phi(z))
+
+def _log_Phi(z: np.ndarray) -> np.ndarray:
+    # stable log CDF
+    return norm.logcdf(z)
+
+def _logaddexp(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    # stable log(exp(x) + exp(y))
+    return np.logaddexp(x, y)
+
+def _logdiffexp(logB: np.ndarray, logA: np.ndarray) -> np.ndarray:
+    # log(exp(logB) - exp(logA)), assuming logB >= logA
+    return logB + np.log1p(-np.exp(logA - logB))
+
+# =========================
+# Truncated normal moments
+# X ~ N(m, s^2), a < X < b
+# =========================
+
+def _etruncnorm(a: np.ndarray, b: np.ndarray, m: np.ndarray, s: np.ndarray) -> np.ndarray:
     """
-    Compute the posterior weights for the exponential component under a point-exponential prior.
-
-    Args:
-        x (np.ndarray): Input data.
-        s (np.ndarray or float): Standard deviations.
-        w (float): Mixture weight for the exponential component.
-        a (float): Scale parameter for the exponential component.
-
-    Returns:
-        np.ndarray: Posterior weights for the exponential component.
+    E[X | a < X < b], robust to extreme tails.
+    a,b,m,s broadcast; a or b can be +/- np.inf.
     """
-    if w == 0:
-        return np.zeros_like(x)
+    s = np.maximum(s, np.finfo(float).tiny)
+    alpha = (a - m) / s
+    beta  = (b - m) / s
 
-    if w == 1:
-        return np.ones_like(x)
+    swap = beta < alpha
+    alpha2 = np.where(swap, beta, alpha)
+    beta2  = np.where(swap, alpha, beta)
 
-    # Log-density for the normal (point mass) component
-    lf = norm.logpdf(x, loc=0, scale=s)
+    logPhiA = _log_Phi(alpha2)
+    logPhiB = _log_Phi(beta2)
+    logZ    = _logdiffexp(logPhiB, logPhiA)
+    Z       = np.maximum(np.exp(logZ), np.finfo(float).tiny)
 
-    # Log-density for the exponential component
-    lg = np.log(a) + s**2 * a**2 / 2 - a * x + norm.logcdf(x / s - s * a)
+    num = _phi(alpha2) - _phi(beta2)
+    t = num / Z
+    # limit 0 when both num and Z ~ 0
+    t = np.where((np.abs(num) <= np.finfo(float).tiny) & (Z <= np.finfo(float).tiny), 0.0, t)
+    return m + s * t
 
-    # Compute posterior weights
-    wpost = w / (w + (1 - w) * np.exp(lf - lg))
+def _e2truncnorm(a: np.ndarray, b: np.ndarray, m: np.ndarray, s: np.ndarray) -> np.ndarray:
+    """
+    E[X^2 | a < X < b], X ~ N(m, s^2), robust for infinite bounds.
+    """
+    s = np.maximum(s, np.finfo(float).tiny)
 
-    return wpost
+    alpha = (a - m) / s
+    beta  = (b - m) / s
+
+    swap = beta < alpha
+    alpha2 = np.where(swap, beta, alpha)
+    beta2  = np.where(swap, alpha, beta)
+
+    logPhiA = norm.logcdf(alpha2)
+    logPhiB = norm.logcdf(beta2)
+    # logZ = log(Phi(beta) - Phi(alpha)) (stable)
+    logZ = logPhiB + np.log1p(-np.exp(logPhiA - logPhiB))
+    Z = np.maximum(np.exp(logZ), np.finfo(float).tiny)
+
+    # standard normal pdfs
+    phi_a = np.exp(-0.5 * alpha2**2 - 0.5 * np.log(2*np.pi))
+    phi_b = np.exp(-0.5 * beta2**2  - 0.5 * np.log(2*np.pi))
+
+    # SAFE products: treat inf*0 -> 0 by masking infs before multiply
+    alpha_safe = np.where(np.isfinite(alpha2), alpha2, 0.0)
+    beta_safe  = np.where(np.isfinite(beta2),  beta2,  0.0)
+    term1 = alpha_safe * phi_a - beta_safe * phi_b
+
+    # (phi_a - phi_b)/Z with 0/0 -> 0
+    num_phi = phi_a - phi_b
+    term2 = num_phi / Z
+    tiny = np.finfo(float).tiny
+    term2 = np.where((np.abs(num_phi) <= tiny) & (Z <= tiny), 0.0, term2)
+
+    var  = s**2 * (1.0 + term1 / Z - term2**2)
+
+    # mean uses the same robust machinery
+    mean = _etruncnorm(a, b, m, s)
+    return var + mean**2
+
+
+# =========================
+# Convolution: Exp(a) * N(0, s^2)
+# For theta >= 0 with Exp(rate=a)
+# =========================
+
+def _log_g_exp(x_minus_mu: np.ndarray, s: np.ndarray, a: float) -> np.ndarray:
+    """
+    log g(x) where g = Exp(rate=a) on theta>=0 convolved with N(0, s^2),
+    evaluated at x - mu.
+    Formula: log a + 0.5 s^2 a^2 - a (x - mu) + logPhi( (x-mu)/s - s a )
+    """
+    z = x_minus_mu / s - s * a
+    return np.log(a) + 0.5 * (s**2) * (a**2) - a * x_minus_mu + _log_Phi(z)
+
+# =========================
+# Posterior responsibility for the non-zero component
+# =========================
+
+def wpost_pe(x: np.ndarray, s: np.ndarray, w: float, a: float, mu: float = 0.0) -> np.ndarray:
+    """
+    Posterior probability of the Exp component:
+      wpost = w * g(x) / ((1-w)*f(x) + w*g(x))
+    where f is N(mu, s^2), g is the exp-normal convolution.
+    Computed in log-space for stability.
+    """
+    if w == 0.0:
+        return np.zeros_like(x, dtype=float)
+    if w == 1.0:
+        return np.ones_like(x, dtype=float)
+
+    xm = x - mu
+    lf = norm.logpdf(x, loc=mu, scale=s)             # log f
+    lg = _log_g_exp(xm, s, a)                        # log g
+
+    log_num = np.log(w)     + lg
+    log_den = _logaddexp(np.log(1.0 - w) + lf, log_num)
+    return np.exp(log_num - log_den)
+
+# =========================
+# Posterior moments
+# =========================
+
+@dataclass
 class PosteriorMeanPointExp:
-    def __init__(self, post_mean, post_mean2, post_sd):
-        self.post_mean = post_mean
-        self.post_mean2 = post_mean2
-        self.post_sd = post_sd
+    post_mean: np.ndarray
+    post_mean2: np.ndarray
+    post_sd: np.ndarray
 
-def posterior_mean_pe(x, s, w, a, mu=0):
+def posterior_mean_pe(x: np.ndarray, s: np.ndarray, w: float, a: float, mu: float = 0.0) -> PosteriorMeanPointExp:
     """
-    Compute the posterior mean for a normal mean under a Laplace prior.
-    
-    Args:
-        x (np.ndarray): Observed data.
-        s (float or np.ndarray): Standard deviation of the normal likelihood.
-        w (float): Mixture weight for the Laplace component.
-        a (float): Laplace scale parameter.
-        mu (float): Mean of the prior distribution (default is 0).
-    
-    Returns:
-        np.ndarray: Posterior means.
+    Compute posterior mean, second moment, and sd of Theta_total = theta + mu
+    under prior (1-w) δ_mu + w * Exp(rate=a) with support theta>=0.
     """
-    # Compute posterior weights
-    wpost = wpost_pe(x - mu, s, w, a)
-     
-    
-    # Compute the truncated means for the Laplace component
-    laplace_mean_positive = my_etruncnorm(0, 99999 ,x - mu - s**2 * a, s) 
-    laplace_component_mean =   laplace_mean_positive  
-    post_mean2              =  wpost * (  my_e2truncnorm(0, np.inf, x - mu - s**2 * a, s)
-                                       )
+    x = np.asarray(x, dtype=float)
+    s = np.asarray(s, dtype=float)
 
-    
-    # Combine posterior means
-    post_mean =    wpost * laplace_component_mean  
+    wpost = wpost_pe(x, s, w, a, mu)
 
-    if np.any(np.isinf(s)):
-        inf_indices = np.isinf(s)
-        #a = 1/scale[1:]
-        # Equivalent of `post$mean[is.infinite(s)]` 
-        post_mean[inf_indices] = wpost  / a 
+    # For the non-zero component: theta|x ~ N(m_pos, s^2) truncated to (0, +inf)
+    m_pos = (x - mu) - (s**2) * a
+    e1 = _etruncnorm(0.0, np.inf, m_pos, s)     # E[theta | nonzero, x]
+    e2 = _e2truncnorm(0.0, np.inf, m_pos, s)    # E[theta^2 | nonzero, x]
 
-        # Equivalent of `post$mean2[is.infinite(s)]`
-        post_mean2[inf_indices] =  2 * wpost / a**2 
+    E_theta  = wpost * e1
+    E_theta2 = wpost * e2
 
-    post_mean2 = np.maximum(post_mean2, post_mean  ** 2)
-    
-    post_sd= np.sqrt(np.maximum(0, post_mean2 - post_mean**2))
-    post_mean2 = post_mean2 + mu**2+ 2*mu*post_mean
-    post_mean  =  post_mean+mu  
-    return PosteriorMeanPointExp(post_mean=post_mean,
-                                     post_mean2=post_mean2,
-                                     post_sd=  post_sd)
+    # s = inf: fallback to prior moments of Exp(rate=a)
+    inf_mask = np.isinf(s)
+    if inf_mask.any():
+        E_theta[inf_mask]  = wpost[inf_mask] * (1.0 / a)
+        E_theta2[inf_mask] = wpost[inf_mask] * (2.0 / (a**2))
 
+    # Ensure second moment >= square of mean (numerically)
+    E_theta2 = np.maximum(E_theta2, E_theta**2)
+    post_sd  = np.sqrt(np.maximum(0.0, E_theta2 - E_theta**2))
 
+    # Shift back by mu:
+    post_mean  = E_theta  + mu
+    post_mean2 = E_theta2 + 2.0 * mu * E_theta + mu**2
 
+    return PosteriorMeanPointExp(post_mean=post_mean, post_mean2=post_mean2, post_sd=post_sd)
 
-def logscale_add(logx, logy):
+# =========================
+# Negative log-likelihood + gradients
+# =========================
+
+def pe_nllik(params_free: np.ndarray, x: np.ndarray, s: np.ndarray,
+             fix_par: Tuple[bool, bool, bool] = (False, False, False),
+             par_init_full: Optional[np.ndarray] = None,
+             calc_grad: bool = True):
     """
-    Compute log(exp(logx) + exp(logy)) in a numerically stable way.
+    NLL under point-exponential model, optionally with analytic gradients.
+    params_free are the *free* parameters corresponding to (~fix_par):
+      full p = [alpha, beta, mu]; w = sigmoid(alpha), a = exp(beta).
     """
-    max_log = np.maximum(logx, logy)
-    return max_log + np.log(np.exp(logx - max_log) + np.exp(logy - max_log))
-
-def pe_nllik(par, x, s, par_init, fix_par, calc_grad=False, calc_hess=False):
-    """
-    Compute the negative log likelihood, gradient, and Hessian for the point-exponential prior.
-
-    Args:
-        par (list): Parameters to optimize (subset based on fix_par).
-        x (np.ndarray): Observed data.
-        s (np.ndarray): Standard deviations.
-        par_init (list): Initial parameters (full set).
-        fix_par (list): Boolean list indicating which parameters are fixed.
-        calc_grad (bool): Whether to calculate the gradient.
-        calc_hess (bool): Whether to calculate the Hessian.
-
-    Returns:
-        float: Negative log likelihood.
-        Optional: Gradient and Hessian as attributes of the output.
-    """
-    fix_pi0, fix_a, fix_mu = fix_par
-
-    # Initialize parameters and update non-fixed values
-    p = np.array(par_init)
-    p[~np.array(fix_par)] = par
-
-    # Parameters
-    w = 1 - 1 / (1 + np.exp(p[0]))  # Transformation for w
-    a = np.exp(p[1])               # Transformation for a
-    mu = p[2]                      # mu
-
-    # Point mass component
-    lf = -0.5 * np.log(2 * np.pi * s**2) - 0.5 * ((x - mu) / s)**2
-
-    # Exponential component
-    xright = (x - mu) / s - s * a
-    lpnormright = norm.logcdf(xright)
-    lg = np.log(a) + s**2 * a**2 / 2 - a * (x - mu) + lpnormright
-
-    # Combine log likelihood components
-    llik = logscale_add(np.log(1 - w) + lf, np.log(w) + lg)
-    nllik = -np.sum(llik)
-
-    # Gradients (optional)
-    if calc_grad or calc_hess:
-        grad = np.zeros(len(par))
-        i = 0
-
-        # Gradient with respect to w (alpha)
-        if not fix_pi0:
-            f = np.exp(lf - llik)
-            g = np.exp(lg - llik)
-            dnllik_dw = f - g
-            dw_dalpha = w * (1 - w)
-            grad[i] = np.sum(dnllik_dw * dw_dalpha)
-            i += 1
-
-        # Gradient with respect to a (beta)
-        if not fix_a or not fix_mu:
-            dlogpnorm_right = np.exp(-0.5 * np.log(2 * np.pi) - 0.5 * xright**2 - lpnormright)
-
-        if not fix_a:
-            dg_da = np.exp(lg - llik) * (1 / a + a * s**2 - (x - mu) - s * dlogpnorm_right)
-            dnllik_da = -w * dg_da
-            da_dbeta = a
-            dnllik_dbeta = dnllik_da * da_dbeta
-            grad[i] = np.sum(dnllik_da * da_dbeta)
-            i += 1
-
-        # Gradient with respect to mu
-        if not fix_mu:
-            df_dmu = np.exp(lf - llik) * ((x - mu) / s**2)
-            dg_dmu = np.exp(lg - llik) * (a - dlogpnorm_right / s)
-            dnllik_dmu = -(1 - w) * df_dmu - w * dg_dmu
-            grad[i] = np.sum(dnllik_dmu)
-
-    # Hessian (optional)
-    if calc_hess:
-        hess = np.zeros((len(par), len(par)))
-        i = 0
-
-        # Hessian with respect to w (alpha)
-        if not fix_pi0:
-            d2nllik_dw2 = dnllik_dw**2
-            d2w_dalpha2 = (1 - 2 * w) * dw_dalpha
-            d2nllik_dalpha2 = d2nllik_dw2 * (dw_dalpha**2) + dnllik_dw * d2w_dalpha2
-            hess[i, i] = np.sum(d2nllik_dalpha2)
-
-            j = i + 1
-            if not fix_a:
-                d2nllik_dwda = dnllik_dw * dnllik_da - dg_da
-                d2nllik_dalphadbeta = d2nllik_dwda * dw_dalpha * da_dbeta
-                hess[i, j] = hess[j, i] = np.sum(d2nllik_dalphadbeta)
-                j += 1
-
-            if not fix_mu:
-                d2nllik_dwdmu = dnllik_dw * dnllik_dmu - (dg_dmu - df_dmu)
-                d2nllik_dalphadmu = d2nllik_dwdmu * dw_dalpha
-                hess[i, j] = hess[j, i] = np.sum(d2nllik_dalphadmu)
-
-            i += 1
-
-        # Hessian with respect to a (beta)
-        if not fix_a:
-            d2g_da2 = dg_da * (1 / a + a * s**2 - (x - mu) - s * dlogpnorm_right) + \
-                      np.exp(lg - llik) * (-1 / a**2 + s**2 * (1 - dlogpnorm_right * xright - dlogpnorm_right**2))
-            d2nllik_da2 = dnllik_da**2 - w * d2g_da2
-            d2a_dbeta2 = da_dbeta
-            d2nllik_dbeta2 = d2nllik_da2 * (da_dbeta**2) + dnllik_da * d2a_dbeta2
-            hess[i, i] = np.sum(d2nllik_dbeta2)
-
-            j = i + 1
-            if not fix_mu:
-                d2g_dadmu = dg_da * (a - dlogpnorm_right / s) + \
-                            np.exp(lg - llik) * (1 - dlogpnorm_right * xright - dlogpnorm_right**2)
-                d2nllik_dbetadmu = dnllik_dbeta * dnllik_dmu - w * d2g_dadmu * da_dbeta
-                hess[i, j] = hess[j, i] = np.sum(d2nllik_dbetadmu)
-
-            i += 1
-
-        # Hessian with respect to mu
-        if not fix_mu:
-            d2f_dmu2 = df_dmu * ((x - mu) / s**2) - np.exp(lf - llik) / s**2
-            d2g_dmu2 = dg_dmu * (a - dlogpnorm_right / s) - \
-                       np.exp(lg - llik) * (dlogpnorm_right * xright + dlogpnorm_right**2) / s**2
-            d2nllik_dmu2 = dnllik_dmu**2 - (1 - w) * d2f_dmu2 - w * d2g_dmu2
-            hess[i, i] = np.sum(d2nllik_dmu2)
-
-    if calc_grad and calc_hess:
-        return nllik, grad, hess
-    elif calc_grad:
-        return nllik, grad
+    # Build full parameter vector p from free + fixed
+    if par_init_full is None:
+        p_full = np.zeros(3, dtype=float)
     else:
-        return nllik
-    
+        p_full = np.array(par_init_full, dtype=float)
+    p_full[~np.array(fix_par, dtype=bool)] = np.asarray(params_free, dtype=float)
 
-    from scipy.optimize import minimize
+    alpha, beta, mu = p_full
+    w = 1.0 / (1.0 + np.exp(-alpha))          # sigmoid
+    a = np.exp(beta)
 
-class optimizePointExponential:
-    def __init__(self, w, a, mu, nllik):
-        self.w = w
-        self.a = a
-        self.mu = mu
-        self.nllik = nllik
+    x = np.asarray(x, dtype=float)
+    s = np.asarray(s, dtype=float)
 
-def optimize_pe_nllik_with_gradient(x, s, par_init, fix_par):
+    # log-likelihood per-point
+    lf = norm.logpdf(x, loc=mu, scale=s)
+    lg = _log_g_exp(x - mu, s, a)
+    llik = _logaddexp(np.log(1.0 - w) + lf, np.log(w) + lg)
+    nll = -np.sum(llik)
+
+    if not calc_grad:
+        return nll
+
+    # responsibilities (posterior over components given current params)
+    # r_f + r_g = 1
+    r_f = np.exp(lf - llik)    # responsibility of point-mass component
+    r_g = np.exp(lg - llik)    # responsibility of exponential component
+
+    # d nll / d alpha (via w):  d nll / d w = sum(f - g); dw/dalpha = w(1-w)
+    grad_full = np.zeros_like(p_full)
+    if not fix_par[0]:
+        dw_dalpha = w * (1.0 - w)
+        d_nll_dw  = np.sum(r_f - r_g)
+        grad_full[0] = d_nll_dw * dw_dalpha
+
+    # Helpful quantities for derivatives wrt a and mu
+    z = (x - mu) / s - s * a
+    # ratio phi(z)/Phi(z) computed stably in log-space; clip to avoid overflow
+    log_ratio = _log_phi(z) - _log_Phi(z)
+    ratio = np.exp(np.clip(log_ratio, a_min=-745, a_max=+745))  # ~exp bounds for float64
+
+    # d lg / d a = 1/a + s^2 a - (x - mu) - s * ratio
+    d_lg_da = (1.0 / a) + (s**2) * a - (x - mu) - s * ratio
+    # d lg / d mu = a - (1/s) * ratio
+    d_lg_dmu = a - ratio / s
+    # d lf / d mu = (x - mu) / s^2
+    d_lf_dmu = (x - mu) / (s**2)
+
+    if not fix_par[1]:
+        # d nll / d a = - sum r_g * d lg / d a   ;  da/dbeta = a
+        d_nll_da = -np.sum(r_g * d_lg_da)
+        grad_full[1] = d_nll_da * a
+
+    if not fix_par[2]:
+        # d nll / d mu = - sum [ (1-w) responsibility * d lf/dmu + w responsibility * d lg/dmu ]
+        d_nll_dmu = -np.sum((1.0 - w) * (r_f * d_lf_dmu) + w * (r_g * d_lg_dmu))
+        # Equivalent: -sum[ r_f * d lf/dmu + r_g * d lg/dmu ]
+        # (since r_f,r_g already include mixing through llik), but both are fine.
+        grad_full[2] = d_nll_dmu
+
+    # return only free gradients
+    return nll, grad_full[~np.array(fix_par, dtype=bool)]
+
+# =========================
+# Optimizer wrapper
+# =========================
+
+@dataclass
+class OptimizePointExponential:
+    w: float
+    a: float
+    mu: float
+    nllik: float
+
+def optimize_pe_nllik_with_gradient(x: np.ndarray, s: np.ndarray,
+                                    par_init: Tuple[float, float, float],
+                                    fix_par: Tuple[bool, bool, bool]) -> OptimizePointExponential:
     """
-    Optimize the negative log likelihood for the point-exponential prior using gradient.
-
-    Args:
-        x (np.ndarray): Observed data.
-        s (np.ndarray): Standard deviations.
-        par_init (list): Initial parameters [alpha, beta, mu].
-        fix_par (list): Boolean list indicating which parameters are fixed.
-
-    Returns:
-        optimizePointExponential: Optimized parameters and final negative log likelihood.
+    Optimize (alpha,beta,mu) on unconstrained scales using L-BFGS-B with analytic gradients.
+    par_init are the full parameters [alpha, beta, mu], regardless of fix_par.
     """
-    # Define a wrapper for the objective function
-    def objective(par):
-        nllik, grad = pe_nllik(par, x, s, par_init, fix_par, calc_grad=True, calc_hess=False)
-        return nllik, grad
+    x = np.asarray(x, dtype=float)
+    s = np.asarray(s, dtype=float)
 
-    # Wrapper for gradient extraction
-    def fun(par):
-        nllik, _ = objective(par)
-        return nllik
+    # Extract free subset
+    p0 = np.asarray(par_init, dtype=float)[~np.array(fix_par, dtype=bool)]
 
-    def jac(par):
-        _, grad = objective(par)
-        return grad
+    def fun(pfree):
+        nll, _ = pe_nllik(pfree, x, s, fix_par=fix_par, par_init_full=np.asarray(par_init, dtype=float), calc_grad=True)
+        return nll
 
-    # Initial values for non-fixed parameters
-    free_params = [p for p, fixed in zip(par_init, fix_par) if not fixed]
+    def jac(pfree):
+        _, g = pe_nllik(pfree, x, s, fix_par=fix_par, par_init_full=np.asarray(par_init, dtype=float), calc_grad=True)
+        return g
 
-    # Bounds: Keep alpha unbounded, beta > 0, and mu unbounded
-    bounds = [
-        (None, None),  # Alpha has no bounds
-        (0, None),     # Beta must be strictly positive
-        (None, None)   # Mu has no bounds
-    ]
-    bounds = [b for b, fixed in zip(bounds, fix_par) if not fixed]
+    # Reasonable bounds only for beta if you like; alpha, mu unbounded.
+    bounds = []
+    k = 0
+    for fixed in fix_par:
+        if not fixed:
+            if k == 1:
+                bounds.append((None, None))  # beta unrestricted; exp(beta) > 0 anyway
+            else:
+                bounds.append((None, None))
+        k += 1
 
-    # Optimize using L-BFGS-B
-    result = minimize(
-        fun, free_params, method="L-BFGS-B", jac=jac, bounds=bounds
+    res = minimize(fun, p0, method="L-BFGS-B", jac=jac, bounds=bounds)
+
+    # Reconstruct full parameters
+    p_full = np.array(par_init, dtype=float)
+    p_full[~np.array(fix_par, dtype=bool)] = res.x
+    alpha, beta, mu = p_full
+    w = 1.0 / (1.0 + np.exp(-alpha))
+    a = float(np.exp(beta))
+    return OptimizePointExponential(w=float(w), a=a, mu=float(mu), nllik=float(res.fun))
+
+# =========================
+# One-shot solver
+# =========================
+
+@dataclass
+class EBNMPointExpResult:
+    post_mean: np.ndarray
+    post_mean2: np.ndarray
+    post_sd: np.ndarray
+    scale: float
+    pi: float
+    log_lik: float
+    mode: float
+
+def ebnm_point_exp_solver(x: np.ndarray, s: np.ndarray,
+                          opt_mu: bool = False,
+                          par_init: Tuple[float, float, float] = (0.0, 0.0, 0.0)) -> EBNMPointExpResult:
+    """
+    Fit point–exponential EBNM and return posterior summaries.
+    par_init are [alpha, beta, mu] (unconstrained scales).
+    If opt_mu=False, mu is fixed at par_init[2].
+    """
+    fix_par = (False, False, not opt_mu)
+
+    opt = optimize_pe_nllik_with_gradient(x, s, par_init=par_init, fix_par=fix_par)
+    post = posterior_mean_pe(x, s, w=opt.w, a=opt.a, mu=opt.mu)
+
+    # compute final log-likelihood (with fitted params)
+    lf = norm.logpdf(x, loc=opt.mu, scale=s)
+    lg = _log_g_exp(x - opt.mu, s, opt.a)
+    llik = _logaddexp(np.log(1.0 - opt.w) + lf, np.log(opt.w) + lg).sum()
+
+    return EBNMPointExpResult(
+        post_mean = post.post_mean,
+        post_mean2= post.post_mean2,
+        post_sd   = post.post_sd,
+        scale     = opt.a,
+        pi        = opt.w,
+        log_lik   = float(llik),
+        mode      = opt.mu
     )
-
-    if not result.success:
-        raise ValueError("Optimization failed: " + result.message)
-
-    # Update the full parameter set with optimized values
-    optimized_params = np.array(par_init)
-    optimized_params[~np.array(fix_par)] = result.x
-
-    # Convert alpha to w
-    optimized_params[0] = 1 - 1 / (1 + np.exp(optimized_params[0]))
-
-    # Convert beta to a
-    optimized_params[1] = np.exp(optimized_params[1])
-
-    return optimizePointExponential(w=optimized_params[0],
-                                     a=optimized_params[1],
-                                     mu=optimized_params[2],
-                                     nllik=result.fun)
-
-
-
-class ebnm_point_exp:
-    def __init__(self, post_mean, post_mean2, post_sd, scale, pi,   log_lik=0,#log_lik2 =0,
-                 mode=0):
-        self.post_mean = post_mean
-        self.post_mean2 = post_mean2
-        self.post_sd = post_sd
-        self.scale= scale
-        self.pi =pi  
-        self.log_lik = log_lik
-       # self.log_lik2= log_lik2 
-        self.mode =  mode
-
-
-def ebnm_point_exp_solver ( x,s,opt_mu=False,par_init = [0.0, 1.0, 0.0]  ):
-    if(opt_mu):
-        fix_par = [False, False, False]
-    else :
-        fix_par = [False, False, True]
-    par_init = par_init
-    optimized_prior =  optimize_pe_nllik_with_gradient(x, s, par_init, fix_par)
-    post_obj=  posterior_mean_pe(x, s, optimized_prior.w, optimized_prior.a, optimized_prior.mu)
-    return( ebnm_point_exp( post_mean=post_obj.post_mean, 
-                                post_mean2=post_obj.post_mean2, 
-                                post_sd=post_obj.post_sd,
-                                scale=optimized_prior.a,
-                                pi=optimized_prior.w,   log_lik=-optimized_prior.nllik,#log_lik2 =0,
-                                mode=optimized_prior.mu)
-    )
+ 
