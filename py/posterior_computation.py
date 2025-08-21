@@ -20,14 +20,14 @@ class PosteriorMeanExp:
 
 def posterior_mean_exp(betahat, sebetahat, log_pi, scale):
     assignment = np.exp(log_pi)
-    assignment = assignment / assignment.sum(axis=1, keepdims=True)
+    assignment = assignment / assignment.sum( )
     mu = 0
     post_assign = np.zeros((betahat.shape[0], scale.shape[0]))
     
     for i in range(betahat.shape[0]):
         post_assign[i,] = wpost_exp(x=betahat[i],
                                     s=sebetahat[i], 
-                                    w=assignment[i,],
+                                    w=assignment ,
                                     scale=scale) 
     
     post_mean = np.zeros(betahat.shape[0])
