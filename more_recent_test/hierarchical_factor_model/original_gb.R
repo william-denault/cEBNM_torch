@@ -129,3 +129,7 @@ mean( (c(X)- c(fit_greedy_ash$L_pm%*%t(fit_greedy_ash$F_pm)))^2)
 
 mean( (c(X)- c(fit_greedy_norm$L_pm%*%t(fit_greedy_norm$F_pm)))^2)
 mean( (c(X)- c(fit_greedy_unimodal$L_pm%*%t(fit_greedy_unimodal$F_pm)))^2)
+
+
+
+

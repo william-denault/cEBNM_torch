@@ -11,7 +11,7 @@ library(ebnm)
 n <- 50
 p <- 40
 noise_sd <- 0.1
-n_iter <- 100 
+n_iter <- 200 
 
 rmse <- numeric(n_iter)
 
@@ -31,7 +31,7 @@ for (i in seq_len(n_iter)) {
   fit <- flash(
     data = Z,
     greedy_Kmax = 10,
-   
+    ebnm_fn = ebnm_ash,
     backfit = TRUE,
     verbose = 0
   )
