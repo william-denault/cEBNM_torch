@@ -108,7 +108,9 @@ P_unimodal= ggplot(L_df_unimodal, aes(x=Var2, y=Var1, fill=value)) +
   ggtitle("GB+ unimoda")+
   labs(x="Component", y="Sample", fill="Value")
 
-
+fit_greedy_ash$elbo
+fit_greedy_laplace$elbo
+fit_greedy_unimodal$elbo
 
 library(gridExtra)
 
