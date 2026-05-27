@@ -4,7 +4,7 @@ library(ggplot2)
 library(flashier)
 
 
-path <- "C:/Document/Serieux/Travail/python_work/cEBNM_torch/more_recent_test/hierarchical_factor_model"
+path <- "C:/Document/Serieux/Travail/python_work/cEBNM_torch/notebooks/hierarchical_factor_model"
 
 Z <- as.matrix(read.table(file.path(path, "Z_matrix.txt"), header=FALSE))
 dim(Z)
@@ -122,7 +122,7 @@ grid.arrange(P_laplace,
 
 
 
-path <- "C:/Document/Serieux/Travail/python_work/cEBNM_torch/more_recent_test/hierarchical_factor_model"
+path <- "C:/Document/Serieux/Travail/python_work/cEBNM_torch/notebooks/hierarchical_factor_model"
 
 X <- as.matrix(read.table(file.path(path, "X_matrix.txt"), header=FALSE))
 dim(X)
