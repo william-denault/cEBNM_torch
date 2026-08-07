@@ -1,0 +1,10 @@
+{
+    "python.defaultInterpreterPath": "C:\\Users\\willi\\miniconda3\\envs\\cebmf\\python.exe",
+    "python.condaPath": "C:\\Users\\willi\\miniconda3\\Scripts\\conda.exe",
+    "jupyter.kernels.filter": [
+        {
+            "path": "C:\\Users\\willi\\miniconda3\\envs\\cebmf\\python.exe",
+            "type": "pythonEnvironment"
+        }
+    ]
+}

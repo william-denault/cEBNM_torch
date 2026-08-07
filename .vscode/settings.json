@@ -1,0 +1,9 @@
+{
+    "python.defaultInterpreterPath": "C:\\Users\\willi\\miniconda3\\envs\\cebmf\\python.exe",
+    "python.condaPath": "C:\\Users\\willi\\miniconda3\\Scripts\\conda.exe",
+    "jupyter.kernels.excludePythonEnvironments": [
+        "C:\\Users\\willi\\miniconda3\\envs\\cebmf\\python.exe"
+    ],
+    "python-envs.defaultEnvManager": "ms-python.python:conda",
+    "python-envs.defaultPackageManager": "ms-python.python:conda"
+}

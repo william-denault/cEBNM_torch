@@ -127,12 +127,12 @@ path <- "C:/Document/Serieux/Travail/python_work/cEBNM_torch/notebooks/hierarchi
 X <- as.matrix(read.table(file.path(path, "X_matrix.txt"), header=FALSE))
 dim(X)
 
-mean( (c(X)- c(fit_greedy_laplace$L_pm%*%t(fit_greedy_laplace$F_pm)))^2)
-mean( (c(X)- c(fit_greedy_ash$L_pm%*%t(fit_greedy_ash$F_pm)))^2)
+sqrt(mean( (c(X)- c(fit_greedy_laplace$L_pm%*%t(fit_greedy_laplace$F_pm)))^2))
+sqrt(mean( (c(X)- c(fit_greedy_ash$L_pm%*%t(fit_greedy_ash$F_pm)))^2))
 
-mean( (c(X)- c(fit_greedy_norm$L_pm%*%t(fit_greedy_norm$F_pm)))^2)
-mean( (c(X)- c(fit_greedy_unimodal$L_pm%*%t(fit_greedy_unimodal$F_pm)))^2)
-
-
+sqrt(mean( (c(X)- c(fit_greedy_norm$L_pm%*%t(fit_greedy_norm$F_pm)))^2))
+sqrt(mean( (c(X)- c(fit_greedy_unimodal$L_pm%*%t(fit_greedy_unimodal$F_pm)))^2))
 
 
+library(Metrics)
+rmse(c(X),c(fit_greedy_unimodal$L_pm%*%t(fit_greedy_unimodal$F_pm)))
